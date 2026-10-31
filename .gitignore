@@ -1,0 +1,5 @@
+mayhem-firmware/
+horusdemodlib/
+test-build/
+__pycache__/
+*.pyc

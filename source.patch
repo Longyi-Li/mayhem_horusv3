@@ -124,122 +124,427 @@ index 0000000..573541a
 +0
 diff --git a/firmware/application/external/horus_rx/ui_horus_rx.cpp b/firmware/application/external/horus_rx/ui_horus_rx.cpp
 new file mode 100644
-index 0000000..4ae6585
+index 0000000..7b7b1d4
 --- /dev/null
 +++ b/firmware/application/external/horus_rx/ui_horus_rx.cpp
-@@ -0,0 +1,60 @@
-+// SPDX-License-Identifier: GPL-2.0-or-later
+@@ -0,0 +1,202 @@
++/*
++ * Copyright (C) 2015 Jared Boone, ShareBrained Technology, Inc.
++ * Copyright (C) 2017 Furrtek
++ * Copyright (C) 2024 Mark Thompson
++ *
++ * This file is part of PortaPack.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2, or (at your option)
++ * any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; see the file COPYING.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street,
++ * Boston, MA 02110-1301, USA.
++ */
++
 +#include "ui_horus_rx.hpp"
 +#include "baseband_api.hpp"
++#include "audio.hpp"
++#include "app_settings.hpp"
++#include "file_path.hpp"
++
 +#include "portapack.hpp"
-+#include "string_format.hpp"
-+#include "../../../baseband/horus/horus_rx.hpp"
-+#include <string.h>
-+#include "ch.h"
++#include <cstring>
++#include <stdio.h>
++#include "rtc_time.hpp"
++
++using namespace portapack;
++namespace pmem = portapack::persistent_memory;
++#include "complex.hpp"
++
 +namespace ui::external_app::horus_rx {
-+namespace {
-+std::string coordinate(int32_t value) {
-+    const bool negative = value < 0;
-+    const uint32_t magnitude = negative ? -value : value;
-+    return std::string(negative ? "-" : "") + to_string_dec_uint(magnitude / 100000) + "." + to_string_dec_uint(magnitude % 100000, 5, '0');
-+}
-+}  // namespace
++
 +HorusView::HorusView(NavigationView& nav)
-+    : nav_(nav) {
++    : nav_{nav} {
 +    constexpr portapack::spi_flash::image_tag_t tag{'P', 'H', 'V', '3'};
 +    baseband::run_image(tag);
-+    add_children({&frequency_, &amp_, &lna_, &vga_, &rssi_, &mode_, &hint_, &callsign_, &latitude_, &longitude_, &altitude_, &sequence_, &time_, &age_, &status_});
-+    portapack::receiver_model.set_sampling_rate(3072000);
-+    portapack::receiver_model.set_baseband_bandwidth(1750000);
-+    portapack::receiver_model.set_target_frequency_with_hidden_offset(431051000, 405);
-+    frequency_.set_step(50);
-+    portapack::receiver_model.enable();
++
++    add_children({&labels,
++                  &field_frequency,
++                  &field_rf_amp,
++                  &field_lna,
++                  &field_vga,
++                  &rssi,
++                  &channel,
++                  &field_volume,
++                  &check_log,
++                  &check_crc,
++                  &text_signature,
++                  &text_serial,
++                  &text_timestamp,
++                  &text_voltage,
++                  &text_frame,
++                  &text_temp,
++                  &text_humid,
++                  &text_press,
++                  &text_vspeed,
++                  &geopos,
++                  &button_see_qr,
++                  &button_see_map});
++
++    field_frequency.set_step(50);
++
++    geopos.set_read_only(true);
++
++    check_log.set_value(logging);
++    check_log.on_select = [this](Checkbox&, bool v) {
++        logging = v;
++    };
++
++    field_frequency.updated = [this](rf::Frequency) {
++        baseband::set_rtty_config(10000, 270);
++        position_received_ = false;
++        last_timestamp_update_ = 0;
++        text_signature.set("Waiting...");
++        text_serial.set("--");
++        text_timestamp.set("--");
++        check_crc.set("CRC --");
++    };
++
++    receiver_model.enable();
++
++    // QR code with geo URI
++    button_see_qr.on_select = [this, &nav](Button&) {
++        if (!position_received_) return;
++        std::string geo_uri = "geo:" + to_string_decimal(geopos.lat(), 5) + "," + to_string_decimal(geopos.lon(), 5);  // 5 decimal digits for ~1 meter accuracy
++        nav.push<QRCodeView>(geo_uri.data());
++    };
++
++    button_see_map.on_select = [this, &nav](Button&) {
++        if (!position_received_) return;
++        geomap_view_ = nav.push<GeoMapView>(
++            sonde_id,
++            geopos.altitude(),
++            GeoPos::alt_unit::METERS,
++            GeoPos::spd_unit::HIDDEN,
++            geopos.lat(),
++            geopos.lon(),
++            999);  // set a dummy heading out of range to draw a cross...probably not ideal?
++        nav.set_on_pop([this]() {
++            geomap_view_ = nullptr;
++        });
++    };
++
++    log_file.append(logs_dir / u"HORUS_" + to_string_timestamp(rtc_time::now()) + u".TXT");
++    check_crc.set("CRC --");
++    text_signature.set("Waiting...");
++    text_voltage.set("--");
++    text_temp.set("--");
++    text_humid.set("--");
++    text_press.set("--");
++    text_vspeed.set("--");
++
++    if (pmem::beep_on_packets()) {
++        audio::set_rate(audio::Rate::Hz_24000);
++        audio::output::start();
++    }
++
++    // inject a PitchRSSIConfigureMessage in order to arm
++    // the pitch rssi events that will be used by the
++    // processor:
++    const PitchRSSIConfigureMessage message{true, 0};
++
++    shared_memory.application_queue.push(message);
++
++    baseband::set_pitch_rssi(0, true);
 +}
++
 +HorusView::~HorusView() {
-+    portapack::receiver_model.disable();
-+    portapack::receiver_model.set_hidden_offset(0);
++    baseband::set_pitch_rssi(0, false);
++
++    receiver_model.disable();
 +    baseband::shutdown();
++    audio::output::stop();
 +}
-+void HorusView::data(const RTTYDataMessage& message) {
++
++void HorusView::on_gps(const GPSPosDataMessage* msg) {
++    if (!geomap_view_)
++        return;
++    geomap_view_->update_my_position(msg->lat, msg->lon, msg->altitude);
++}
++void HorusView::on_orientation(const OrientationDataMessage* msg) {
++    if (!geomap_view_)
++        return;
++    geomap_view_->update_my_orientation(msg->angle, true);
++}
++
++void HorusView::focus() {
++    field_frequency.focus();
++}
++
++void HorusView::on_packet(const RTTYDataMessage& message) {
 +    if (message.data_len != sizeof(horus::Position)) return;
-+    horus::Position position{};
-+    memcpy(&position, message.data, sizeof(position));
-+    position.callsign[15] = 0;
-+    callsign_.set(std::string(position.callsign) + "  #" + to_string_dec_uint(position.sequence));
-+    latitude_.set("Lat: " + coordinate(position.latitude));
-+    longitude_.set("Lon: " + coordinate(position.longitude));
-+    altitude_.set("Altitude: " + to_string_dec_int(position.altitude) + " m");
-+    sequence_.set("Packets: " + to_string_dec_uint(++packets_));
-+    if (position.seconds >= 0 && position.seconds < 86400) {
-+        time_.set("UTC: " + to_string_dec_uint(position.seconds / 3600, 2, '0') + ":" + to_string_dec_uint(position.seconds / 60 % 60, 2, '0') + ":" + to_string_dec_uint(position.seconds % 60, 2, '0'));
-+    } else
-+        time_.set("UTC: unavailable");
-+    position_valid_ = position.latitude != 0 || position.longitude != 0;
-+    last_rx_ = chTimeNow();
-+    last_age_ = 0xffffffff;
-+    tick();
++    horus::Position p{};
++    memcpy(&p, message.data, sizeof(p));
++    p.callsign[15] = 0;
++    sonde_id = p.callsign;
++    text_signature.set("Horus V3");
++    text_serial.set(sonde_id);
++    check_crc.set("CRC OK");
++    text_frame.set(to_string_dec_uint(p.sequence));
++    text_timestamp.set(p.seconds >= 0 && p.seconds < 86400 ? to_string_dec_uint(p.seconds / 3600, 2, '0') + ":" + to_string_dec_uint(p.seconds / 60 % 60, 2, '0') + ":" + to_string_dec_uint(p.seconds % 60, 2, '0') + " UTC" : "--");
++    text_voltage.set(p.fields & 1 ? to_string_decimal(p.millivolts / 1000.0f, 2) + "V" : "--");
++    text_temp.set(p.fields & 2 ? to_string_decimal(p.temperature / 10.0f, 1) + STR_DEGREES_C : "--");
++    text_humid.set(p.fields & 4 ? to_string_dec_uint(p.humidity) + "%" : "--");
++    text_press.set(p.fields & 8 ? to_string_decimal(p.pressure / 10.0f, 1) + " hPa" : "--");
++    if (p.fields & 16) text_vspeed.set(to_string_decimal(p.ascent / 100.0f, 1) + " m/s");
++    const bool valid = (p.latitude != 0 || p.longitude != 0) && p.altitude != -1000;
++    if (valid) {
++        const auto now = rtc_time::rtcToUnixUTC(rtc_time::now());
++        if (!(p.fields & 16) && last_timestamp_update_ && now - last_timestamp_update_ >= 10)
++            text_vspeed.set(to_string_decimal((p.altitude - last_altitude_) / float(now - last_timestamp_update_), 1) + " m/s");
++        if (!last_timestamp_update_ || now - last_timestamp_update_ >= 10) {
++            last_timestamp_update_ = now;
++            last_altitude_ = p.altitude;
++        }
++        const float lat = p.latitude / 100000.0f, lon = p.longitude / 100000.0f;
++        geopos.set_altitude(p.altitude);
++        geopos.set_lat(lat);
++        geopos.set_lon(lon);
++        position_received_ = true;
++        if (geomap_view_) geomap_view_->update_position(lat, lon, 400, p.altitude, 0);
++    }
++    if (logging) {
++        log_file.write_entry(rtc_time::now(), sonde_id + "," + to_string_dec_uint(p.sequence) + "," + to_string_dec_int(p.seconds) + "," +
++                                                  to_string_decimal(p.latitude / 100000.0f, 5) + "," + to_string_decimal(p.longitude / 100000.0f, 5) + "," + to_string_dec_int(p.altitude));
++    }
++    if (pmem::beep_on_packets()) baseband::request_rssi_beep();
 +}
-+void HorusView::tick() {
-+    if (!packets_) return;
-+    const uint32_t seconds = static_cast<uint32_t>(chTimeNow() - last_rx_) / CH_FREQUENCY;
-+    if (seconds == last_age_) return;
-+    last_age_ = seconds;
-+    age_.set("Last packet: " + to_string_dec_uint(seconds) + " s ago");
-+    status_.set(seconds > 30 ? "STALE - no new packet" : (position_valid_ ? "CRC OK - last received fix" : "GPS position unavailable"));
++
++void HorusView::on_freqchg(int64_t freq) {
++    field_frequency.set_value(freq);
 +}
++
 +}  // namespace ui::external_app::horus_rx
 diff --git a/firmware/application/external/horus_rx/ui_horus_rx.hpp b/firmware/application/external/horus_rx/ui_horus_rx.hpp
 new file mode 100644
-index 0000000..23c3e97
+index 0000000..f7ba093
 --- /dev/null
 +++ b/firmware/application/external/horus_rx/ui_horus_rx.hpp
-@@ -0,0 +1,46 @@
-+// SPDX-License-Identifier: GPL-2.0-or-later
-+#pragma once
-+#include "ui.hpp"
+@@ -0,0 +1,209 @@
++/*
++ * Copyright (C) 2015 Jared Boone, ShareBrained Technology, Inc.
++ * Copyright (C) 2017 Furrtek
++ * Copyright (C) 2024 Mark Thompson
++ *
++ * This file is part of PortaPack.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2, or (at your option)
++ * any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; see the file COPYING.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#ifndef __UI_HORUS_RX_H__
++#define __UI_HORUS_RX_H__
++
 +#include "ui_navigation.hpp"
 +#include "ui_receiver.hpp"
 +#include "ui_freq_field.hpp"
-+#include "radio_state.hpp"
++#include "ui_rssi.hpp"
++#include "ui_qrcode.hpp"
++#include "ui_geomap.hpp"
++#include "string_format.hpp"
++
++#include "event_m0.hpp"
++
++#include "log_file.hpp"
++
++#include "../../../baseband/horus/horus_rx.hpp"
 +#include "app_settings.hpp"
++#include "radio_state.hpp"
++#include <cstddef>
++#include <string>
 +
 +namespace ui::external_app::horus_rx {
++
 +class HorusView : public View {
 +   public:
++    static constexpr uint32_t initial_target_frequency = 431051000;
++
 +    HorusView(NavigationView& nav);
 +    ~HorusView();
-+    void focus() override { frequency_.focus(); }
-+    std::string title() const override { return "Horus V3"; }
++    HorusView(const HorusView& other) = delete;
++    HorusView& operator=(const HorusView& other) = delete;
++
++    void focus() override;
++
++    std::string title() const override { return "Horus V3"; };
 +
 +   private:
 +    NavigationView& nav_;
-+    RxRadioState radio_state_{};
-+    RxFrequencyField frequency_{{UI_POS_X(0), UI_POS_Y(0)}, nav_};
-+    RFAmpField amp_{{UI_POS_X(13), UI_POS_Y(0)}};
-+    LNAGainField lna_{{UI_POS_X(15), UI_POS_Y(0)}};
-+    VGAGainField vga_{{UI_POS_X(18), UI_POS_Y(0)}};
-+    RSSI rssi_{{UI_POS_X(21), UI_POS_Y(0), UI_POS_WIDTH_REMAINING(21), 4}};
-+    Text mode_{{UI_POS_X(0), UI_POS_Y(2), UI_POS_MAXWIDTH, 16}, "Horus V3 100bd / 270Hz"};
-+    Text hint_{{UI_POS_X(0), UI_POS_Y(3), UI_POS_MAXWIDTH, 16}, "Tune LOWEST tone; step 50Hz"};
-+    Text callsign_{{UI_POS_X(0), UI_POS_Y(5), UI_POS_MAXWIDTH, 16}, "Waiting for CRC-valid packet"};
-+    Text latitude_{{UI_POS_X(0), UI_POS_Y(7), UI_POS_MAXWIDTH, 16}, "Lat: --"};
-+    Text longitude_{{UI_POS_X(0), UI_POS_Y(8), UI_POS_MAXWIDTH, 16}, "Lon: --"};
-+    Text altitude_{{UI_POS_X(0), UI_POS_Y(10), UI_POS_MAXWIDTH, 16}, "Altitude: --"};
-+    Text sequence_{{UI_POS_X(0), UI_POS_Y(12), UI_POS_MAXWIDTH, 16}, "Packets: 0"};
-+    Text time_{{UI_POS_X(0), UI_POS_Y(13), UI_POS_MAXWIDTH, 16}, "UTC: --"};
-+    Text age_{{UI_POS_X(0), UI_POS_Y(14), UI_POS_MAXWIDTH, 16}, "Last packet: never"};
-+    Text status_{{UI_POS_X(0), UI_POS_Y(15), UI_POS_MAXWIDTH, 16}, "No fix until valid coordinates"};
-+    uint32_t packets_{};
-+    uint32_t last_rx_{}, last_age_{0xffffffff};
-+    bool position_valid_{};
-+    void data(const RTTYDataMessage& message);
-+    void tick();
-+    MessageHandlerRegistration handler_{Message::ID::RTTYData, [this](Message* message) {
-+                                            data(*static_cast<const RTTYDataMessage*>(message));
-+                                        }};
-+    MessageHandlerRegistration frame_handler_{Message::ID::DisplayFrameSync, [this](const Message*) { tick(); }};
++    RxRadioState radio_state_{
++        431051000 /* frequency */,
++        1750000 /* bandwidth */,
++        2457600 /* sampling rate */
++    };
++    bool logging{false};
++    app_settings::SettingsManager settings_{
++        "rx_horus",
++        app_settings::Mode::RX,
++        {
++            {"logging"sv, &logging},
++        }};
++
++    LogFile log_file{};
++
++    std::string sonde_id{};
++
++    // AudioOutput audio_output { };
++
++    Labels labels{
++        {{UI_POS_X(4), UI_POS_Y(2)}, "Type:", Theme::getInstance()->fg_light->foreground},
++        {{UI_POS_X(6), UI_POS_Y(3)}, "ID:", Theme::getInstance()->fg_light->foreground},
++        {{UI_POS_X(0), UI_POS_Y(4)}, "DateTime:", Theme::getInstance()->fg_light->foreground},
++
++        {{UI_POS_X(3), UI_POS_Y(5)}, "Vbatt:", Theme::getInstance()->fg_light->foreground},
++        {{UI_POS_X(3), UI_POS_Y(6)}, "Frame:", Theme::getInstance()->fg_light->foreground},
++        {{UI_POS_X(4), UI_POS_Y(7)}, "Temp:", Theme::getInstance()->fg_light->foreground},
++        {{UI_POS_X(0), UI_POS_Y(8)}, "Humidity:", Theme::getInstance()->fg_light->foreground},
++        {{UI_POS_X(0), UI_POS_Y(9)}, "Pressure:", Theme::getInstance()->fg_light->foreground},
++        {{UI_POS_X(2), UI_POS_Y(10)}, "VSpeed:", Theme::getInstance()->fg_light->foreground}};
++
++    RxFrequencyField field_frequency{
++        {UI_POS_X(0), UI_POS_Y(0)},
++        nav_};
++
++    RFAmpField field_rf_amp{
++        {UI_POS_X(13), UI_POS_Y(0)}};
++    LNAGainField field_lna{
++        {UI_POS_X(15), UI_POS_Y(0)}};
++
++    VGAGainField field_vga{
++        {UI_POS_X(18), UI_POS_Y(0)}};
++
++    RSSI rssi{
++        {UI_POS_X(21), UI_POS_Y(0), UI_POS_WIDTH_REMAINING(24), 4}};
++    Channel channel{
++        {UI_POS_X(21), UI_POS_Y(0) + 5, UI_POS_WIDTH_REMAINING(24), 4},
++    };
++
++    AudioVolumeField field_volume{
++        {UI_POS_X_RIGHT(2), UI_POS_Y(0)}};
++
++    Checkbox check_log{
++        {UI_POS_X_RIGHT(8), UI_POS_Y(8)},
++        3,
++        "Log"};
++
++    Text check_crc{{UI_POS_X_RIGHT(8), UI_POS_Y(10), UI_POS_WIDTH(8), UI_POS_HEIGHT(1)}, "CRC OK"};
++
++    Text text_signature{
++        {UI_POS_X(9), UI_POS_Y(2), UI_POS_WIDTH_REMAINING(10), UI_POS_HEIGHT(1)},
++        "..."};
++
++    Text text_serial{
++        {UI_POS_X(9), UI_POS_Y(3), UI_POS_WIDTH_REMAINING(10), UI_POS_HEIGHT(1)},
++        "..."};
++
++    Text text_timestamp{
++        {UI_POS_X(9), UI_POS_Y(4), UI_POS_WIDTH_REMAINING(9), UI_POS_HEIGHT(1)},
++        "..."};
++
++    Text text_voltage{
++        {UI_POS_X(9), UI_POS_Y(5), UI_POS_WIDTH(10), UI_POS_HEIGHT(1)},
++        "..."};
++
++    Text text_frame{
++        {UI_POS_X(9), UI_POS_Y(6), UI_POS_WIDTH(10), UI_POS_HEIGHT(1)},
++        "..."};
++
++    Text text_temp{
++        {UI_POS_X(9), UI_POS_Y(7), UI_POS_WIDTH(10), UI_POS_HEIGHT(1)},
++        "..."};
++
++    Text text_humid{
++        {UI_POS_X(9), UI_POS_Y(8), UI_POS_WIDTH(10), UI_POS_HEIGHT(1)},
++        "..."};
++
++    Text text_press{
++        {UI_POS_X(9), UI_POS_Y(9), UI_POS_WIDTH(10), UI_POS_HEIGHT(1)},
++        "..."};
++
++    Text text_vspeed{
++        {UI_POS_X(9), UI_POS_Y(10), UI_POS_WIDTH(10), UI_POS_HEIGHT(1)},
++        "..."};
++
++    GeoPos geopos{
++        {UI_POS_X(0), UI_POS_Y(12)},
++        GeoPos::alt_unit::METERS,
++        GeoPos::spd_unit::HIDDEN};
++
++    Button button_see_qr{
++        {UI_POS_X_CENTER(12) - UI_POS_WIDTH(8), UI_POS_Y_BOTTOM(4), UI_POS_WIDTH(12), UI_POS_HEIGHT(3)},
++        "See QR"};
++
++    Button button_see_map{
++        {UI_POS_X_CENTER(12) + UI_POS_WIDTH(8), UI_POS_Y_BOTTOM(4), UI_POS_WIDTH(12), UI_POS_HEIGHT(3)},
++        "See on map"};
++
++    GeoMapView* geomap_view_{nullptr};
++    time_t last_timestamp_update_{0};
++    int32_t last_altitude_{0};
++    bool position_received_{false};
++
++    MessageHandlerRegistration message_handler_packet{
++        Message::ID::RTTYData,
++        [this](Message* const p) {
++            this->on_packet(*static_cast<const RTTYDataMessage*>(p));
++        }};
++
++    MessageHandlerRegistration message_handler_gps{
++        Message::ID::GPSPosData,
++        [this](Message* const p) {
++            const auto message = static_cast<const GPSPosDataMessage*>(p);
++            this->on_gps(message);
++        }};
++    MessageHandlerRegistration message_handler_orientation{
++        Message::ID::OrientationData,
++        [this](Message* const p) {
++            const auto message = static_cast<const OrientationDataMessage*>(p);
++            this->on_orientation(message);
++        }};
++    MessageHandlerRegistration message_handler_freqchg{
++        Message::ID::FreqChangeCommand,
++        [this](Message* const p) {
++            const auto message = static_cast<const FreqChangeCommandMessage*>(p);
++            this->on_freqchg(message->freq);
++        }};
++
++    void on_freqchg(int64_t freq);
++
++    void on_gps(const GPSPosDataMessage* msg);
++    void on_orientation(const OrientationDataMessage* msg);
++    void on_packet(const RTTYDataMessage& message);
 +};
++
 +}  // namespace ui::external_app::horus_rx
++
++#endif /*__UI_HORUS_RX_H__*/
 diff --git a/firmware/baseband/CMakeLists.txt b/firmware/baseband/CMakeLists.txt
 index eab77f2..8cfcf17 100644
 --- a/firmware/baseband/CMakeLists.txt
@@ -2577,10 +2882,10 @@ index 0000000..4ce674a
 +#endif
 diff --git a/firmware/baseband/horus/horus_rx.cpp b/firmware/baseband/horus/horus_rx.cpp
 new file mode 100644
-index 0000000..131535e
+index 0000000..b4022ff
 --- /dev/null
 +++ b/firmware/baseband/horus/horus_rx.cpp
-@@ -0,0 +1,167 @@
+@@ -0,0 +1,233 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +#include "horus_rx.hpp"
 +#include <string.h>
@@ -2620,8 +2925,8 @@ index 0000000..131535e
 +bool parse_v3(const uint8_t* payload, size_t size, Position& out) {
 +    if (size < 16) return false;
 +    Bits b(payload, size);
-+    b.get(1);   // ASN.1 extension-present bit; extensions follow the root fields.
-+    b.get(11);  // Root optional field presence map.
++    b.get(1);                         // ASN.1 extension-present bit; extensions follow the root fields.
++    const auto optional = b.get(11);  // Root optional field presence map.
 +    const unsigned length = b.get(4) + 1;
 +    if (length > 15) return false;
 +    static const char alphabet[] = "-/0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -2634,6 +2939,47 @@ index 0000000..131535e
 +    result.latitude = static_cast<int32_t>(lat) - 9000000;
 +    result.longitude = static_cast<int32_t>(lon) - 18000000;
 +    result.altitude = static_cast<int32_t>(alt) - 1000;
++    // Complex extraSensors precede the remaining optionals. Keep the mandatory
++    // fix when present; never guess their variable-length encoding.
++    if (!(optional & (1u << 10))) {
++        if (optional & (1u << 9)) b.get(10);
++        if (optional & (1u << 8)) b.get(5);
++        if (optional & (1u << 7)) {
++            result.ascent = int32_t(b.get(16)) - 32767;
++            result.fields |= 16;
++        }
++        if (optional & (1u << 6)) {
++            result.pressure = b.get(14);
++            result.fields |= 8;
++        }
++        if (optional & (1u << 5)) {
++            const auto mask = b.get(4);
++            for (unsigned n = 0; n < 4; ++n)
++                if (mask & (8u >> n)) {
++                    const int32_t value = int32_t(b.get(11)) - 1023;
++                    if (n == 0 || !(result.fields & 2)) {
++                        result.temperature = value;
++                        result.fields |= 2;
++                    }
++                }
++        }
++        if (optional & (1u << 4)) {
++            result.humidity = b.get(7);
++            result.fields |= 4;
++        }
++        if (optional & (1u << 3)) {
++            const auto mask = b.get(4);
++            for (unsigned n = 0; n < 4; ++n)
++                if (mask & (8u >> n)) {
++                    const auto value = b.get(14);
++                    if (n == 0) {
++                        result.millivolts = value;
++                        result.fields |= 1;
++                    }
++                }
++        }
++        if (!b.valid) return false;
++    }
 +    out = result;
 +    return true;
 +}
@@ -2643,31 +2989,43 @@ index 0000000..131535e
 +    reset();
 +}
 +void Receiver::reset() {
-+    for (auto& lane : lanes_) lane = Lane{};
-+    for (auto& tone : tones_) tone = Tone{};
++    for (auto& bank : lanes_)
++        for (auto& lane : bank) lane = Lane{};
++    for (auto& bank : tones_)
++        for (auto& tone : bank) tone = Tone{};
 +    ring_ = oscillator_ = 0;
 +    memset(filter_i_, 0, sizeof(filter_i_));
 +    memset(filter_q_, 0, sizeof(filter_q_));
-+    filter_pos_ = filter_count_ = 0;
++    filter_pos_ = filter_count_ = radio_phase_ = 0;
 +    samples_ = packets_ = 0;
 +    last_crc_ = 0;
 +    last_packet_sample_ = 0;
 +}
-+void Receiver::sample_24k(int16_t i, int16_t q) {
-+    // 24k -> 2.4k anti-alias filter. 800 Hz cutoff, Hamming window, Q15 taps.
-+    static const int16_t taps[121] = {0, -3, -6, -9, -12, -16, -19, -22, -24, -25, -26, -24, -21, -17, -9, 0, 11, 25, 39, 55, 70, 84, 97, 105, 110, 109, 102, 87, 65, 36, 0, -42, -89, -139, -190, -239, -283, -319, -344, -355, -349, -323, -277, -208, -115, 0, 137, 294, 467, 654, 850, 1050, 1248, 1440, 1620, 1783, 1923, 2037, 2121, 2173, 2190, 2173, 2121, 2037, 1923, 1783, 1620, 1440, 1248, 1050, 850, 654, 467, 294, 137, 0, -115, -208, -277, -323, -349, -355, -344, -319, -283, -239, -190, -139, -89, -42, 0, 36, 65, 87, 102, 109, 110, 105, 97, 84, 70, 55, 39, 25, 11, 0, -9, -17, -21, -24, -26, -25, -24, -22, -19, -16, -12, -9, -6, -3, 0};
++void Receiver::sample_radio_38400(int16_t i, int16_t q) {
++    // Lowest tone is the displayed RF frequency. Shift by -405 Hz here,
++    // keeping stock Radiosonde radio tuning and startup unchanged.
++    const unsigned phase = (uint64_t(radio_phase_) * 160) >> 32;
++    const int32_t sn = sine[phase], cs = sine[(phase + 40) % 160];
++    radio_phase_ += 45298483u;  // round(405 / 38400 * 2^32)
++    const int32_t re = (int64_t(i) * cs + int64_t(q) * sn) >> 16;
++    const int32_t im = (int64_t(q) * cs - int64_t(i) * sn) >> 16;
++    sample_38400(re, im);
++}
++void Receiver::sample_38400(int16_t i, int16_t q) {
++    // 38.4k -> 2.4k anti-alias filter. 800 Hz cutoff, Hamming window, Q15 taps.
++    static const int16_t taps[193] = {0, -1, -2, -4, -5, -6, -7, -9, -10, -11, -12, -13, -14, -15, -16, -16, -16, -16, -15, -14, -12, -10, -7, -4, 0, 4, 9, 14, 20, 26, 32, 38, 44, 50, 55, 60, 63, 66, 68, 69, 68, 66, 62, 56, 48, 39, 28, 15, 0, -16, -34, -52, -71, -91, -111, -130, -149, -167, -183, -197, -208, -216, -221, -222, -218, -210, -196, -177, -153, -123, -88, -47, 0, 52, 109, 171, 237, 306, 379, 454, 531, 609, 687, 765, 841, 915, 985, 1052, 1114, 1171, 1221, 1265, 1302, 1331, 1352, 1365, 1369, 1365, 1352, 1331, 1302, 1265, 1221, 1171, 1114, 1052, 985, 915, 841, 765, 687, 609, 531, 454, 379, 306, 237, 171, 109, 52, 0, -47, -88, -123, -153, -177, -196, -210, -218, -222, -221, -216, -208, -197, -183, -167, -149, -130, -111, -91, -71, -52, -34, -16, 0, 15, 28, 39, 48, 56, 62, 66, 68, 69, 68, 66, 63, 60, 55, 50, 44, 38, 32, 26, 20, 14, 9, 4, 0, -4, -7, -10, -12, -14, -15, -16, -16, -16, -16, -15, -14, -13, -12, -11, -10, -9, -7, -6, -5, -4, -2, -1, 0};
 +    filter_i_[filter_pos_] = i;
 +    filter_q_[filter_pos_] = q;
 +    const unsigned newest = filter_pos_;
-+    filter_pos_ = (filter_pos_ + 1) % 121;
-+    if (++filter_count_ < 10) return;
++    filter_pos_ = (filter_pos_ + 1) % 193;
++    if (++filter_count_ < 16) return;
 +    filter_count_ = 0;
 +    int64_t re = 0, im = 0;
 +    unsigned pos = newest;
-+    for (unsigned n = 0; n < 121; ++n) {
++    for (unsigned n = 0; n < 193; ++n) {
 +        re += static_cast<int32_t>(filter_i_[pos]) * taps[n];
 +        im += static_cast<int32_t>(filter_q_[pos]) * taps[n];
-+        pos = pos == 0 ? 120 : pos - 1;
++        pos = pos == 0 ? 192 : pos - 1;
 +    }
 +    // FIR overshoot can exceed the int16 range even for bounded input.
 +    re >>= 15;
@@ -2680,40 +3038,53 @@ index 0000000..131535e
 +}
 +void Receiver::sample(int16_t i, int16_t q) {
 +    static const unsigned steps[4] = {133, 151, 9, 27};  // -405,-135,135,405 Hz
-+    uint64_t best = 0;
-+    unsigned winner = 0;
-+    for (unsigned t = 0; t < 4; ++t) {
-+        const unsigned phase = (oscillator_ * steps[t]) % 160;
-+        const int32_t s = sine[phase], c = sine[(phase + 40) % 160];
-+        // Conjugate mixing; divide before accumulating to bound all sums.
-+        const int16_t re = (static_cast<int32_t>(i) * c + static_cast<int32_t>(q) * s) >> 16;
-+        const int16_t im = (static_cast<int32_t>(q) * c - static_cast<int32_t>(i) * s) >> 16;
-+        auto& tone = tones_[t];
-+        tone.re += re - tone.history_re[ring_];
-+        tone.im += im - tone.history_im[ring_];
-+        tone.history_re[ring_] = re;
-+        tone.history_im[ring_] = im;
-+        const uint64_t energy = static_cast<int64_t>(tone.re) * tone.re + static_cast<int64_t>(tone.im) * tone.im;
-+        if (energy > best) {
-+            best = energy;
-+            winner = t;
++    // A 10-ms coherent detector has exact nulls at +/-100 Hz. Search three
++    // simultaneous carrier hypotheses so a small oscillator error cannot put
++    // every wanted tone in a detector null. No radio retuning is involved.
++    static const unsigned offsets[frequency_banks] = {0, 6, 154};  // 0,+90,-90 Hz
++    ++samples_;
++    for (unsigned bank = 0; bank < frequency_banks; ++bank) {
++        uint64_t best = 0;
++        unsigned winner = 0;
++        for (unsigned t = 0; t < 4; ++t) {
++            const unsigned phase = (oscillator_ * ((steps[t] + offsets[bank]) % 160)) % 160;
++            const int32_t s = sine[phase], c = sine[(phase + 40) % 160];
++            // Conjugate mixing; divide before accumulating to bound all sums.
++            const int16_t re = (static_cast<int32_t>(i) * c + static_cast<int32_t>(q) * s) >> 16;
++            const int16_t im = (static_cast<int32_t>(q) * c - static_cast<int32_t>(i) * s) >> 16;
++            auto& tone = tones_[bank][t];
++            tone.re += re - tone.history_re[ring_];
++            tone.im += im - tone.history_im[ring_];
++            tone.history_re[ring_] = re;
++            tone.history_im[ring_] = im;
++            const uint64_t energy = static_cast<int64_t>(tone.re) * tone.re + static_cast<int64_t>(tone.im) * tone.im;
++            if (energy > best) {
++                best = energy;
++                winner = t;
++            }
 +        }
++        // Eight symbol-timing hypotheses per carrier, 24 collectors in total:
++        // the same packet-buffer memory as the original single-carrier decoder.
++        if (samples_ >= phases && ring_ % 3 == 0)
++            symbol(lanes_[bank][ring_ / 3], winner);
 +    }
-+    if (++samples_ >= phases) symbol(lanes_[ring_], winner);
 +    ring_ = (ring_ + 1) % phases;
 +    oscillator_ = (oscillator_ + 1) % 160;
 +}
 +void Receiver::symbol(Lane& lane, unsigned value) {
-+    if (!lane.collecting) {
-+        lane.sync = (lane.sync << 2) | value;
-+        if (lane.sync == 0x2424) {
-+            memset(lane.data, 0, sizeof(lane.data));
-+            lane.data[0] = lane.data[1] = 0x24;
-+            lane.bits = 16;
-+            lane.collecting = true;
-+        }
++    // Keep searching while collecting: a false/aborted frame must not hide
++    // the next real packet for the maximum (almost ten-second) frame length.
++    lane.sync = (lane.sync << 2) | value;
++    const unsigned uw_errors = __builtin_popcount((lane.sync ^ 0x2424u) & 0xffffu);
++    const unsigned preamble_errors = __builtin_popcount((lane.sync >> 16) ^ 0x1b1bu);
++    if ((!lane.collecting && uw_errors == 0) || (uw_errors <= 1 && preamble_errors <= 2)) {
++        memset(lane.data, 0, sizeof(lane.data));
++        lane.data[0] = lane.data[1] = 0x24;
++        lane.bits = 16;
++        lane.collecting = true;
 +        return;
 +    }
++    if (!lane.collecting) return;
 +    lane.data[lane.bits / 8] |= value << (6 - lane.bits % 8);
 +    lane.bits += 2;
 +    if (lane.bits % 8) return;
@@ -2750,10 +3121,10 @@ index 0000000..131535e
 +}  // namespace horus
 diff --git a/firmware/baseband/horus/horus_rx.hpp b/firmware/baseband/horus/horus_rx.hpp
 new file mode 100644
-index 0000000..af2b29f
+index 0000000..f57f298
 --- /dev/null
 +++ b/firmware/baseband/horus/horus_rx.hpp
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,54 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +// Fixed-memory Horus V3 receiver, 2400 complex samples/s, 100 symbols/s.
 +#pragma once
@@ -2764,6 +3135,9 @@ index 0000000..af2b29f
 +struct Position {
 +    char callsign[16]{};
 +    uint16_t sequence{};
++    uint16_t millivolts{}, pressure{};
++    int16_t temperature{}, ascent{};
++    uint8_t humidity{}, fields{};
 +    int32_t seconds{}, latitude{}, longitude{}, altitude{};
 +};
 +bool parse_v3(const uint8_t* payload, size_t size, Position& out);
@@ -2774,24 +3148,28 @@ index 0000000..af2b29f
 +    Receiver(Callback callback, void* context);
 +    void reset();
 +    void sample(int16_t i, int16_t q);
-+    void sample_24k(int16_t i, int16_t q);
++    void sample_38400(int16_t i, int16_t q);
++    void sample_radio_38400(int16_t i, int16_t q);
 +    uint32_t packets() const { return packets_; }
 +
 +   private:
 +    static constexpr unsigned phases = 24;
++    static constexpr unsigned frequency_banks = 3;
++    static constexpr unsigned timing_lanes = 8;
 +    struct Lane {
-+        uint16_t sync{};
++        uint32_t sync{};
 +        uint16_t bits{};
 +        bool collecting{};
 +        uint8_t data[249]{};
-+    } lanes_[phases]{};
++    } lanes_[frequency_banks][timing_lanes]{};
 +    struct Tone {
 +        int32_t re{}, im{};
 +        int16_t history_re[phases]{}, history_im[phases]{};
-+    } tones_[4]{};
++    } tones_[frequency_banks][4]{};
 +    unsigned ring_{}, oscillator_{};
-+    int16_t filter_i_[121]{}, filter_q_[121]{};
++    int16_t filter_i_[193]{}, filter_q_[193]{};
 +    unsigned filter_pos_{}, filter_count_{};
++    uint32_t radio_phase_{};
 +    uint32_t samples_{}, packets_{};
 +    uint16_t last_crc_{};
 +    uint32_t last_packet_sample_{};
@@ -2863,32 +3241,55 @@ index 0000000..0e15a0a
 +#endif
 diff --git a/firmware/baseband/proc_horus.cpp b/firmware/baseband/proc_horus.cpp
 new file mode 100644
-index 0000000..057db2a
+index 0000000..3e2285c
 --- /dev/null
 +++ b/firmware/baseband/proc_horus.cpp
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,112 @@
++/*
++ * Copyright (C) 2015 Jared Boone, ShareBrained Technology, Inc.
++ * Copyright (C) 2017 Furrtek
++ * Copyright (C) 2024 Mark Thompson
++ *
++ * This file is part of PortaPack.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2, or (at your option)
++ * any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; see the file COPYING.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street,
++ * Boston, MA 02110-1301, USA.
++ */
++
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +#include "proc_horus.hpp"
 +#include "portapack_shared_memory.hpp"
 +#include "event_m4.hpp"
 +#include <string.h>
++#include "audio_dma.hpp"
 +
 +HorusProcessor::HorusProcessor() {
-+    decim_0.configure(taps_4k25_decim_0.taps);
-+    decim_1.configure(taps_4k25_decim_1.taps);
-+    filter.configure(taps_11k0_channel.taps, 2);
-+    configured_ = true;
++    decim_0.configure(taps_11k0_decim_0.taps);
++    decim_1.configure(taps_11k0_decim_1.taps);
++    baseband_thread.start();
 +}
 +void HorusProcessor::execute(const buffer_c8_t& input) {
-+    if (!configured_) return;
++    // The message loop and DSP run on different ChibiOS threads. Reset only
++    // here, at a sample-block boundary, never from the message-loop thread.
++    if (reset_requested_.exchange(false, std::memory_order_relaxed)) decoder_.reset();
 +    const buffer_c16_t target{buffer_.data(), buffer_.size()};
 +    const auto first = decim_0.execute(input, target);
-+    const buffer_c16_t half{buffer_.data() + 256, 256};
-+    const auto second = decim_1.execute(first, half);
-+    const auto channel = filter.execute(second, target);  // 24000 complex samples/s
++    const auto channel = decim_1.execute(first, target);  // Stock Radiosonde path: 38400 complex samples/s
 +    feed_channel_stats(channel);
 +    for (size_t n = 0; n < channel.count; ++n) {
-+        decoder_.sample_24k(channel.p[n].real(), channel.p[n].imag());
++        decoder_.sample_radio_38400(channel.p[n].real(), channel.p[n].imag());
 +    }
 +}
 +void HorusProcessor::received(const horus::Position& position, void*) {
@@ -2900,22 +3301,68 @@ index 0000000..057db2a
 +    message.data_len = sizeof(position);
 +    shared_memory.application_queue.push(message);
 +}
-+void HorusProcessor::on_message(const Message* message) {
-+    if (message->id == Message::ID::RTTYData) {
-+        decoder_.reset();
++void HorusProcessor::on_message(const Message* const msg) {
++    switch (msg->id) {
++        case Message::ID::RTTYData:
++            reset_requested_.store(true, std::memory_order_relaxed);
++            break;
++        case Message::ID::RequestSignal:
++            on_signal_message(*reinterpret_cast<const RequestSignalMessage*>(msg));
++            break;
++
++        case Message::ID::AudioBeep:
++            on_beep_message(*reinterpret_cast<const AudioBeepMessage*>(msg));
++            break;
++
++        case Message::ID::PitchRSSIConfigure:
++            on_pitch_rssi_config(*reinterpret_cast<const PitchRSSIConfigureMessage*>(msg));
++            break;
++
++        default:
++            break;
 +    }
 +}
++
++void HorusProcessor::on_signal_message(const RequestSignalMessage& message) {
++    if (message.signal == RequestSignalMessage::Signal::RSSIBeepRequest) {
++        float rssi_ratio = (float)last_rssi / RSSI_CEILING;
++        uint32_t beep_duration = 0;
++
++        if (rssi_ratio <= PROPORTIONAL_BEEP_THRES) {
++            beep_duration = BEEP_MIN_DURATION;
++        } else if (rssi_ratio < 1) {
++            beep_duration = rssi_ratio * BEEP_DURATION_RANGE + BEEP_MIN_DURATION;
++        } else {
++            beep_duration = BEEP_DURATION_RANGE + BEEP_MIN_DURATION;
++        }
++
++        audio::dma::beep_start(beep_freq, DEFAULT_AUDIO_SAMPLE_RATE, beep_duration);
++    }
++}
++
++void HorusProcessor::on_beep_message(const AudioBeepMessage& message) {
++    audio::dma::beep_start(message.freq, message.sample_rate, message.duration_ms);
++}
++
++void HorusProcessor::on_pitch_rssi_config(const PitchRSSIConfigureMessage& message) {
++    pitch_rssi_enabled = message.enabled;
++
++    beep_freq = message.rssi * RSSI_PITCH_WEIGHT + BEEP_BASE_FREQ;
++    last_rssi = message.rssi;
++}
++
 +int main() {
++    audio::dma::init_audio_out();
 +    EventDispatcher dispatcher{std::make_unique<HorusProcessor>()};
 +    dispatcher.run();
 +    return 0;
 +}
 diff --git a/firmware/baseband/proc_horus.hpp b/firmware/baseband/proc_horus.hpp
 new file mode 100644
-index 0000000..78b2b78
+index 0000000..aea442c
 --- /dev/null
 +++ b/firmware/baseband/proc_horus.hpp
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,42 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +#pragma once
 +#include "baseband_processor.hpp"
@@ -2924,6 +3371,17 @@ index 0000000..78b2b78
 +#include "dsp_decimate.hpp"
 +#include "dsp_fir_taps.hpp"
 +#include "horus/horus_rx.hpp"
++#include <atomic>
++
++#define BEEP_MIN_DURATION 60
++#define BEEP_DURATION_RANGE 100
++#define BEEP_BASE_FREQ 400  // Lowest audible freq for some PortaPack speakers
++#define BEEP_MAX_FREQ 8000  // Highest audible freq for some PortaPack speakers
++#define BEEP_SIMPLE_FREQ 1000
++#define RSSI_CEILING 1000
++#define PROPORTIONAL_BEEP_THRES 0.8
++#define RSSI_PITCH_WEIGHT (float(BEEP_MAX_FREQ - BEEP_BASE_FREQ) / RSSI_CEILING)
++#define DEFAULT_AUDIO_SAMPLE_RATE 24000
 +
 +class HorusProcessor : public BasebandProcessor {
 +   public:
@@ -2932,14 +3390,18 @@ index 0000000..78b2b78
 +    void on_message(const Message* message) override;
 +
 +   private:
-+    static constexpr uint32_t sample_rate = 3072000;
++    bool pitch_rssi_enabled{false};
++    uint32_t last_rssi{}, beep_freq{};
++    void on_signal_message(const RequestSignalMessage& message);
++    void on_beep_message(const AudioBeepMessage& message);
++    void on_pitch_rssi_config(const PitchRSSIConfigureMessage& message);
++    static constexpr uint32_t sample_rate = 2457600;
 +    dsp::decimate::FIRC8xR16x24FS4Decim8 decim_0{};
 +    dsp::decimate::FIRC16xR16x32Decim8 decim_1{};
-+    dsp::decimate::FIRAndDecimateComplex filter{};
 +    std::array<complex16_t, 512> buffer_{};
-+    bool configured_{false};
++    std::atomic<bool> reset_requested_{false};
 +    horus::Receiver decoder_{received, this};
 +    static void received(const horus::Position& position, void* context);
-+    BasebandThread baseband_thread{sample_rate, this, baseband::Direction::Receive};
++    BasebandThread baseband_thread{sample_rate, this, baseband::Direction::Receive, false};
 +    RSSIThread rssi_thread{};
 +};

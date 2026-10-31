@@ -1,0 +1,5 @@
+
+checking placement of 4801 external app symbols across 94 regions
+all external app symbols are in their own app's region
+PASS: PRALINE firmware size/checksum/version; all 94 apps checksum/version; Horus header and embedded baseband
+Horus app=32212 bytes, M0=7668 bytes, M4=24540 bytes

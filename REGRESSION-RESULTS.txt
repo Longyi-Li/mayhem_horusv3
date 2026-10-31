@@ -1,0 +1,4 @@
+offset=-100 Hz: v3 packets=0, v4 packets=1
+offset=+0 Hz: v3 packets=1, v4 packets=1
+offset=+100 Hz: v3 packets=0, v4 packets=1
+PASS: same noisy IQ files fail at +/-100 Hz in v3 and decode in v4
