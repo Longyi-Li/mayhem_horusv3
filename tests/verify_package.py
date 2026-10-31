@@ -31,5 +31,3 @@ for path in sorted((package/'SDCARD').rglob('*')):
     if path.is_file():
         entries.append(hashlib.sha256(path.read_bytes()).hexdigest()+'  '+path.relative_to(package).as_posix())
 (package/'SHA256SUMS.txt').write_text('\n'.join(entries)+'\n')
-
-

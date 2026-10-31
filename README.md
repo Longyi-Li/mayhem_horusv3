@@ -102,6 +102,3 @@ standard library. SHA256SUMS.txt records hashes for the SD card payload.
 Mayhem/app code: GPL-2.0-or-later. Vendored Horus codec: LGPL-2.1.
 Original Radiosonde authors' attribution is retained. License copies are
 included. No PR/issue was submitted and no hardware was flashed here.
-
-
-
