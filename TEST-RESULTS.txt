@@ -1,0 +1,6 @@
+PASS: 24 synthetic/noise/FEC cases
+PASS: 24 kHz anti-alias/filter/decimation path
+Recording strongest bins (Hz): [1267.8 1805.6 1269.5 1012.1 1260.5 1285.1  998.8 1004.1 1256.1 1536.7
+ 1273.8 1289.1 1556.1 1269.  1281.3 1272.4 1284.  1283.9 1002.7 1007.9]
+PASS official recording, center=1405: 9 packets; first: 4FSKTEST-V2 0 3 23 34 56
+PASS: official recording through 24 kHz frontend, all 9 packets identical

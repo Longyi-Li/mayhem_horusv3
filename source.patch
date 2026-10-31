@@ -1,0 +1,2945 @@
+diff --git a/firmware/application/external/external.cmake b/firmware/application/external/external.cmake
+index 10ee499..c16d351 100644
+--- a/firmware/application/external/external.cmake
++++ b/firmware/application/external/external.cmake
+@@ -1,4 +1,6 @@
+ set(EXTCPPSRC
++	external/horus_rx/main.cpp
++	external/horus_rx/ui_horus_rx.cpp
+ 	#afsk_rx   16 byte
+ 	external/afsk_rx/main.cpp
+ 	external/afsk_rx/ui_afsk_rx.cpp
+@@ -432,6 +434,7 @@ set(EXTCPPSRC
+ )
+ 
+ set(EXTAPPLIST
++	horus_rx
+ 	afsk_rx
+ 	calculator
+ 	font_viewer
+diff --git a/firmware/application/external/external_tier0.ld b/firmware/application/external/external_tier0.ld
+index ac5c30c..ccec9d6 100644
+--- a/firmware/application/external/external_tier0.ld
++++ b/firmware/application/external/external_tier0.ld
+@@ -122,6 +122,7 @@ MEMORY
+     ram_external_app_rds_rx                (rwx) : org = 0xAE110000, len = 32k
+     ram_external_app_wmbus_rx              (rwx) : org = 0xAE120000, len = 32k
+     ram_external_app_spec_an               (rwx) : org = 0xAE130000, len = 32k
++    ram_external_app_horus_rx              (rwx) : org = 0xAE140000, len = 32k
+ }
+ 
+ SECTIONS
+@@ -719,4 +720,10 @@ SECTIONS
+         KEEP(*(.external_app.app_spec_an.application_information));
+         */external/spec_an/*(*ui*external_app*spec_an*);
+     } > ram_external_app_spec_an
++
++    .external_app_horus_rx : ALIGN(4) SUBALIGN(4)
++    {
++        KEEP(*(.external_app.app_horus_rx.application_information));
++        */external/horus_rx/*(*ui*external_app*horus_rx*);
++    } > ram_external_app_horus_rx
+ }
+diff --git a/firmware/application/external/external_tier1.ld b/firmware/application/external/external_tier1.ld
+index 2fed5fd..00e35b6 100644
+--- a/firmware/application/external/external_tier1.ld
++++ b/firmware/application/external/external_tier1.ld
+@@ -118,6 +118,7 @@ MEMORY
+     ram_external_app_rds_rx                (rwx) : org = 0xAE0D0000, len = 32k
+     ram_external_app_wmbus_rx              (rwx) : org = 0xAE0E0000, len = 32k
+     ram_external_app_spec_an               (rwx) : org = 0xAE0F0000, len = 32k
++    ram_external_app_horus_rx              (rwx) : org = 0xAE100000, len = 32k
+ }
+ 
+ SECTIONS
+@@ -691,4 +692,10 @@ SECTIONS
+         KEEP(*(.external_app.app_spec_an.application_information));
+         */external/spec_an/*(*ui*external_app*spec_an*);
+     } > ram_external_app_spec_an
++
++    .external_app_horus_rx : ALIGN(4) SUBALIGN(4)
++    {
++        KEEP(*(.external_app.app_horus_rx.application_information));
++        */external/horus_rx/*(*ui*external_app*horus_rx*);
++    } > ram_external_app_horus_rx
+ }
+diff --git a/firmware/application/external/external_tier2.ld b/firmware/application/external/external_tier2.ld
+index a63a52a..5168944 100644
+--- a/firmware/application/external/external_tier2.ld
++++ b/firmware/application/external/external_tier2.ld
+@@ -116,6 +116,7 @@ MEMORY
+     ram_external_app_rds_rx                (rwx) : org = 0xAE0B0000, len = 32k
+     ram_external_app_wmbus_rx              (rwx) : org = 0xAE0C0000, len = 32k
+     ram_external_app_spec_an               (rwx) : org = 0xAE0D0000, len = 32k
++    ram_external_app_horus_rx              (rwx) : org = 0xAE0E0000, len = 32k
+ }
+ 
+ SECTIONS
+@@ -677,4 +678,10 @@ SECTIONS
+         KEEP(*(.external_app.app_spec_an.application_information));
+         */external/spec_an/*(*ui*external_app*spec_an*);
+     } > ram_external_app_spec_an
++
++    .external_app_horus_rx : ALIGN(4) SUBALIGN(4)
++    {
++        KEEP(*(.external_app.app_horus_rx.application_information));
++        */external/horus_rx/*(*ui*external_app*horus_rx*);
++    } > ram_external_app_horus_rx
+ }
+diff --git a/firmware/application/external/horus_rx/main.cpp b/firmware/application/external/horus_rx/main.cpp
+new file mode 100644
+index 0000000..136b0ef
+--- /dev/null
++++ b/firmware/application/external/horus_rx/main.cpp
+@@ -0,0 +1,23 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++#include "ui_horus_rx.hpp"
++#include "external_app.hpp"
++namespace ui::external_app::horus_rx {
++void initialize_app(NavigationView& nav) {
++    nav.push<HorusView>();
++}
++}  // namespace ui::external_app::horus_rx
++extern "C" {
++__attribute__((section(".external_app.app_horus_rx.application_information"), used))
++application_information_t _application_information_horus_rx = {
++    (uint8_t*)0,
++    ui::external_app::horus_rx::initialize_app,
++    CURRENT_HEADER_VERSION,
++    VERSION_MD5,
++    "Horus V3",
++    {0, 0, 0x80, 1, 0xc0, 3, 0xe0, 7, 0xf0, 15, 0x80, 1, 0x80, 1, 0x80, 1, 0x80, 1, 0x80, 1, 0xc0, 3, 0xe0, 7, 0xf0, 15, 0, 0, 0, 0, 0, 0},
++    ui::Color::green().v,
++    app_location_t::RX,
++    -1,
++    {'P', 'H', 'V', '3'},
++    0};
++}
+diff --git a/firmware/application/external/horus_rx/tier.txt b/firmware/application/external/horus_rx/tier.txt
+new file mode 100644
+index 0000000..573541a
+--- /dev/null
++++ b/firmware/application/external/horus_rx/tier.txt
+@@ -0,0 +1 @@
++0
+diff --git a/firmware/application/external/horus_rx/ui_horus_rx.cpp b/firmware/application/external/horus_rx/ui_horus_rx.cpp
+new file mode 100644
+index 0000000..4ae6585
+--- /dev/null
++++ b/firmware/application/external/horus_rx/ui_horus_rx.cpp
+@@ -0,0 +1,60 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++#include "ui_horus_rx.hpp"
++#include "baseband_api.hpp"
++#include "portapack.hpp"
++#include "string_format.hpp"
++#include "../../../baseband/horus/horus_rx.hpp"
++#include <string.h>
++#include "ch.h"
++namespace ui::external_app::horus_rx {
++namespace {
++std::string coordinate(int32_t value) {
++    const bool negative = value < 0;
++    const uint32_t magnitude = negative ? -value : value;
++    return std::string(negative ? "-" : "") + to_string_dec_uint(magnitude / 100000) + "." + to_string_dec_uint(magnitude % 100000, 5, '0');
++}
++}  // namespace
++HorusView::HorusView(NavigationView& nav)
++    : nav_(nav) {
++    constexpr portapack::spi_flash::image_tag_t tag{'P', 'H', 'V', '3'};
++    baseband::run_image(tag);
++    add_children({&frequency_, &amp_, &lna_, &vga_, &rssi_, &mode_, &hint_, &callsign_, &latitude_, &longitude_, &altitude_, &sequence_, &time_, &age_, &status_});
++    portapack::receiver_model.set_sampling_rate(3072000);
++    portapack::receiver_model.set_baseband_bandwidth(1750000);
++    portapack::receiver_model.set_target_frequency_with_hidden_offset(431051000, 405);
++    frequency_.set_step(50);
++    portapack::receiver_model.enable();
++}
++HorusView::~HorusView() {
++    portapack::receiver_model.disable();
++    portapack::receiver_model.set_hidden_offset(0);
++    baseband::shutdown();
++}
++void HorusView::data(const RTTYDataMessage& message) {
++    if (message.data_len != sizeof(horus::Position)) return;
++    horus::Position position{};
++    memcpy(&position, message.data, sizeof(position));
++    position.callsign[15] = 0;
++    callsign_.set(std::string(position.callsign) + "  #" + to_string_dec_uint(position.sequence));
++    latitude_.set("Lat: " + coordinate(position.latitude));
++    longitude_.set("Lon: " + coordinate(position.longitude));
++    altitude_.set("Altitude: " + to_string_dec_int(position.altitude) + " m");
++    sequence_.set("Packets: " + to_string_dec_uint(++packets_));
++    if (position.seconds >= 0 && position.seconds < 86400) {
++        time_.set("UTC: " + to_string_dec_uint(position.seconds / 3600, 2, '0') + ":" + to_string_dec_uint(position.seconds / 60 % 60, 2, '0') + ":" + to_string_dec_uint(position.seconds % 60, 2, '0'));
++    } else
++        time_.set("UTC: unavailable");
++    position_valid_ = position.latitude != 0 || position.longitude != 0;
++    last_rx_ = chTimeNow();
++    last_age_ = 0xffffffff;
++    tick();
++}
++void HorusView::tick() {
++    if (!packets_) return;
++    const uint32_t seconds = static_cast<uint32_t>(chTimeNow() - last_rx_) / CH_FREQUENCY;
++    if (seconds == last_age_) return;
++    last_age_ = seconds;
++    age_.set("Last packet: " + to_string_dec_uint(seconds) + " s ago");
++    status_.set(seconds > 30 ? "STALE - no new packet" : (position_valid_ ? "CRC OK - last received fix" : "GPS position unavailable"));
++}
++}  // namespace ui::external_app::horus_rx
+diff --git a/firmware/application/external/horus_rx/ui_horus_rx.hpp b/firmware/application/external/horus_rx/ui_horus_rx.hpp
+new file mode 100644
+index 0000000..23c3e97
+--- /dev/null
++++ b/firmware/application/external/horus_rx/ui_horus_rx.hpp
+@@ -0,0 +1,46 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++#pragma once
++#include "ui.hpp"
++#include "ui_navigation.hpp"
++#include "ui_receiver.hpp"
++#include "ui_freq_field.hpp"
++#include "radio_state.hpp"
++#include "app_settings.hpp"
++
++namespace ui::external_app::horus_rx {
++class HorusView : public View {
++   public:
++    HorusView(NavigationView& nav);
++    ~HorusView();
++    void focus() override { frequency_.focus(); }
++    std::string title() const override { return "Horus V3"; }
++
++   private:
++    NavigationView& nav_;
++    RxRadioState radio_state_{};
++    RxFrequencyField frequency_{{UI_POS_X(0), UI_POS_Y(0)}, nav_};
++    RFAmpField amp_{{UI_POS_X(13), UI_POS_Y(0)}};
++    LNAGainField lna_{{UI_POS_X(15), UI_POS_Y(0)}};
++    VGAGainField vga_{{UI_POS_X(18), UI_POS_Y(0)}};
++    RSSI rssi_{{UI_POS_X(21), UI_POS_Y(0), UI_POS_WIDTH_REMAINING(21), 4}};
++    Text mode_{{UI_POS_X(0), UI_POS_Y(2), UI_POS_MAXWIDTH, 16}, "Horus V3 100bd / 270Hz"};
++    Text hint_{{UI_POS_X(0), UI_POS_Y(3), UI_POS_MAXWIDTH, 16}, "Tune LOWEST tone; step 50Hz"};
++    Text callsign_{{UI_POS_X(0), UI_POS_Y(5), UI_POS_MAXWIDTH, 16}, "Waiting for CRC-valid packet"};
++    Text latitude_{{UI_POS_X(0), UI_POS_Y(7), UI_POS_MAXWIDTH, 16}, "Lat: --"};
++    Text longitude_{{UI_POS_X(0), UI_POS_Y(8), UI_POS_MAXWIDTH, 16}, "Lon: --"};
++    Text altitude_{{UI_POS_X(0), UI_POS_Y(10), UI_POS_MAXWIDTH, 16}, "Altitude: --"};
++    Text sequence_{{UI_POS_X(0), UI_POS_Y(12), UI_POS_MAXWIDTH, 16}, "Packets: 0"};
++    Text time_{{UI_POS_X(0), UI_POS_Y(13), UI_POS_MAXWIDTH, 16}, "UTC: --"};
++    Text age_{{UI_POS_X(0), UI_POS_Y(14), UI_POS_MAXWIDTH, 16}, "Last packet: never"};
++    Text status_{{UI_POS_X(0), UI_POS_Y(15), UI_POS_MAXWIDTH, 16}, "No fix until valid coordinates"};
++    uint32_t packets_{};
++    uint32_t last_rx_{}, last_age_{0xffffffff};
++    bool position_valid_{};
++    void data(const RTTYDataMessage& message);
++    void tick();
++    MessageHandlerRegistration handler_{Message::ID::RTTYData, [this](Message* message) {
++                                            data(*static_cast<const RTTYDataMessage*>(message));
++                                        }};
++    MessageHandlerRegistration frame_handler_{Message::ID::DisplayFrameSync, [this](const Message*) { tick(); }};
++};
++}  // namespace ui::external_app::horus_rx
+diff --git a/firmware/baseband/CMakeLists.txt b/firmware/baseband/CMakeLists.txt
+index eab77f2..8cfcf17 100644
+--- a/firmware/baseband/CMakeLists.txt
++++ b/firmware/baseband/CMakeLists.txt
+@@ -935,6 +935,18 @@ set(MODE_CPPSRC
+ DeclareTargets(PUSB sd_over_usb)
+ 
+ 
++### Horus V3: baseband travels inside the SD-card external app.
++set(add_to_firmware FALSE)
++set(MODE_CPPSRC
++    proc_horus.cpp
++    horus/horus_rx.cpp
++    horus/horus_l2.c
++    horus/golay23.c
++)
++set_source_files_properties(horus/horus_l2.c PROPERTIES COMPILE_DEFINITIONS "HORUS_L2_RX;SCRAMBLER;INTERLEAVER;NDEBUG")
++set_source_files_properties(horus/golay23.c PROPERTIES COMPILE_DEFINITIONS "NO_TABLES;NDEBUG")
++DeclareTargets(PHV3 horus)
++
+ ### HackRF "factory" firmware
+ 
+ # The RAM image (${HACKRF_FIRMWARE_BIN_IMAGE}) is produced by the hackrf
+diff --git a/firmware/baseband/horus/COPYING.LGPL-2.1 b/firmware/baseband/horus/COPYING.LGPL-2.1
+new file mode 100644
+index 0000000..8000a6f
+--- /dev/null
++++ b/firmware/baseband/horus/COPYING.LGPL-2.1
+@@ -0,0 +1,504 @@
++                  GNU LESSER GENERAL PUBLIC LICENSE
++                       Version 2.1, February 1999
++
++ Copyright (C) 1991, 1999 Free Software Foundation, Inc.
++ 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
++ Everyone is permitted to copy and distribute verbatim copies
++ of this license document, but changing it is not allowed.
++
++[This is the first released version of the Lesser GPL.  It also counts
++ as the successor of the GNU Library Public License, version 2, hence
++ the version number 2.1.]
++
++                            Preamble
++
++  The licenses for most software are designed to take away your
++freedom to share and change it.  By contrast, the GNU General Public
++Licenses are intended to guarantee your freedom to share and change
++free software--to make sure the software is free for all its users.
++
++  This license, the Lesser General Public License, applies to some
++specially designated software packages--typically libraries--of the
++Free Software Foundation and other authors who decide to use it.  You
++can use it too, but we suggest you first think carefully about whether
++this license or the ordinary General Public License is the better
++strategy to use in any particular case, based on the explanations below.
++
++  When we speak of free software, we are referring to freedom of use,
++not price.  Our General Public Licenses are designed to make sure that
++you have the freedom to distribute copies of free software (and charge
++for this service if you wish); that you receive source code or can get
++it if you want it; that you can change the software and use pieces of
++it in new free programs; and that you are informed that you can do
++these things.
++
++  To protect your rights, we need to make restrictions that forbid
++distributors to deny you these rights or to ask you to surrender these
++rights.  These restrictions translate to certain responsibilities for
++you if you distribute copies of the library or if you modify it.
++
++  For example, if you distribute copies of the library, whether gratis
++or for a fee, you must give the recipients all the rights that we gave
++you.  You must make sure that they, too, receive or can get the source
++code.  If you link other code with the library, you must provide
++complete object files to the recipients, so that they can relink them
++with the library after making changes to the library and recompiling
++it.  And you must show them these terms so they know their rights.
++
++  We protect your rights with a two-step method: (1) we copyright the
++library, and (2) we offer you this license, which gives you legal
++permission to copy, distribute and/or modify the library.
++
++  To protect each distributor, we want to make it very clear that
++there is no warranty for the free library.  Also, if the library is
++modified by someone else and passed on, the recipients should know
++that what they have is not the original version, so that the original
++author's reputation will not be affected by problems that might be
++introduced by others.
++
++  Finally, software patents pose a constant threat to the existence of
++any free program.  We wish to make sure that a company cannot
++effectively restrict the users of a free program by obtaining a
++restrictive license from a patent holder.  Therefore, we insist that
++any patent license obtained for a version of the library must be
++consistent with the full freedom of use specified in this license.
++
++  Most GNU software, including some libraries, is covered by the
++ordinary GNU General Public License.  This license, the GNU Lesser
++General Public License, applies to certain designated libraries, and
++is quite different from the ordinary General Public License.  We use
++this license for certain libraries in order to permit linking those
++libraries into non-free programs.
++
++  When a program is linked with a library, whether statically or using
++a shared library, the combination of the two is legally speaking a
++combined work, a derivative of the original library.  The ordinary
++General Public License therefore permits such linking only if the
++entire combination fits its criteria of freedom.  The Lesser General
++Public License permits more lax criteria for linking other code with
++the library.
++
++  We call this license the "Lesser" General Public License because it
++does Less to protect the user's freedom than the ordinary General
++Public License.  It also provides other free software developers Less
++of an advantage over competing non-free programs.  These disadvantages
++are the reason we use the ordinary General Public License for many
++libraries.  However, the Lesser license provides advantages in certain
++special circumstances.
++
++  For example, on rare occasions, there may be a special need to
++encourage the widest possible use of a certain library, so that it becomes
++a de-facto standard.  To achieve this, non-free programs must be
++allowed to use the library.  A more frequent case is that a free
++library does the same job as widely used non-free libraries.  In this
++case, there is little to gain by limiting the free library to free
++software only, so we use the Lesser General Public License.
++
++  In other cases, permission to use a particular library in non-free
++programs enables a greater number of people to use a large body of
++free software.  For example, permission to use the GNU C Library in
++non-free programs enables many more people to use the whole GNU
++operating system, as well as its variant, the GNU/Linux operating
++system.
++
++  Although the Lesser General Public License is Less protective of the
++users' freedom, it does ensure that the user of a program that is
++linked with the Library has the freedom and the wherewithal to run
++that program using a modified version of the Library.
++
++  The precise terms and conditions for copying, distribution and
++modification follow.  Pay close attention to the difference between a
++"work based on the library" and a "work that uses the library".  The
++former contains code derived from the library, whereas the latter must
++be combined with the library in order to run.
++
++                  GNU LESSER GENERAL PUBLIC LICENSE
++   TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
++
++  0. This License Agreement applies to any software library or other
++program which contains a notice placed by the copyright holder or
++other authorized party saying it may be distributed under the terms of
++this Lesser General Public License (also called "this License").
++Each licensee is addressed as "you".
++
++  A "library" means a collection of software functions and/or data
++prepared so as to be conveniently linked with application programs
++(which use some of those functions and data) to form executables.
++
++  The "Library", below, refers to any such software library or work
++which has been distributed under these terms.  A "work based on the
++Library" means either the Library or any derivative work under
++copyright law: that is to say, a work containing the Library or a
++portion of it, either verbatim or with modifications and/or translated
++straightforwardly into another language.  (Hereinafter, translation is
++included without limitation in the term "modification".)
++
++  "Source code" for a work means the preferred form of the work for
++making modifications to it.  For a library, complete source code means
++all the source code for all modules it contains, plus any associated
++interface definition files, plus the scripts used to control compilation
++and installation of the library.
++
++  Activities other than copying, distribution and modification are not
++covered by this License; they are outside its scope.  The act of
++running a program using the Library is not restricted, and output from
++such a program is covered only if its contents constitute a work based
++on the Library (independent of the use of the Library in a tool for
++writing it).  Whether that is true depends on what the Library does
++and what the program that uses the Library does.
++
++  1. You may copy and distribute verbatim copies of the Library's
++complete source code as you receive it, in any medium, provided that
++you conspicuously and appropriately publish on each copy an
++appropriate copyright notice and disclaimer of warranty; keep intact
++all the notices that refer to this License and to the absence of any
++warranty; and distribute a copy of this License along with the
++Library.
++
++  You may charge a fee for the physical act of transferring a copy,
++and you may at your option offer warranty protection in exchange for a
++fee.
++
++  2. You may modify your copy or copies of the Library or any portion
++of it, thus forming a work based on the Library, and copy and
++distribute such modifications or work under the terms of Section 1
++above, provided that you also meet all of these conditions:
++
++    a) The modified work must itself be a software library.
++
++    b) You must cause the files modified to carry prominent notices
++    stating that you changed the files and the date of any change.
++
++    c) You must cause the whole of the work to be licensed at no
++    charge to all third parties under the terms of this License.
++
++    d) If a facility in the modified Library refers to a function or a
++    table of data to be supplied by an application program that uses
++    the facility, other than as an argument passed when the facility
++    is invoked, then you must make a good faith effort to ensure that,
++    in the event an application does not supply such function or
++    table, the facility still operates, and performs whatever part of
++    its purpose remains meaningful.
++
++    (For example, a function in a library to compute square roots has
++    a purpose that is entirely well-defined independent of the
++    application.  Therefore, Subsection 2d requires that any
++    application-supplied function or table used by this function must
++    be optional: if the application does not supply it, the square
++    root function must still compute square roots.)
++
++These requirements apply to the modified work as a whole.  If
++identifiable sections of that work are not derived from the Library,
++and can be reasonably considered independent and separate works in
++themselves, then this License, and its terms, do not apply to those
++sections when you distribute them as separate works.  But when you
++distribute the same sections as part of a whole which is a work based
++on the Library, the distribution of the whole must be on the terms of
++this License, whose permissions for other licensees extend to the
++entire whole, and thus to each and every part regardless of who wrote
++it.
++
++Thus, it is not the intent of this section to claim rights or contest
++your rights to work written entirely by you; rather, the intent is to
++exercise the right to control the distribution of derivative or
++collective works based on the Library.
++
++In addition, mere aggregation of another work not based on the Library
++with the Library (or with a work based on the Library) on a volume of
++a storage or distribution medium does not bring the other work under
++the scope of this License.
++
++  3. You may opt to apply the terms of the ordinary GNU General Public
++License instead of this License to a given copy of the Library.  To do
++this, you must alter all the notices that refer to this License, so
++that they refer to the ordinary GNU General Public License, version 2,
++instead of to this License.  (If a newer version than version 2 of the
++ordinary GNU General Public License has appeared, then you can specify
++that version instead if you wish.)  Do not make any other change in
++these notices.
++
++  Once this change is made in a given copy, it is irreversible for
++that copy, so the ordinary GNU General Public License applies to all
++subsequent copies and derivative works made from that copy.
++
++  This option is useful when you wish to copy part of the code of
++the Library into a program that is not a library.
++
++  4. You may copy and distribute the Library (or a portion or
++derivative of it, under Section 2) in object code or executable form
++under the terms of Sections 1 and 2 above provided that you accompany
++it with the complete corresponding machine-readable source code, which
++must be distributed under the terms of Sections 1 and 2 above on a
++medium customarily used for software interchange.
++
++  If distribution of object code is made by offering access to copy
++from a designated place, then offering equivalent access to copy the
++source code from the same place satisfies the requirement to
++distribute the source code, even though third parties are not
++compelled to copy the source along with the object code.
++
++  5. A program that contains no derivative of any portion of the
++Library, but is designed to work with the Library by being compiled or
++linked with it, is called a "work that uses the Library".  Such a
++work, in isolation, is not a derivative work of the Library, and
++therefore falls outside the scope of this License.
++
++  However, linking a "work that uses the Library" with the Library
++creates an executable that is a derivative of the Library (because it
++contains portions of the Library), rather than a "work that uses the
++library".  The executable is therefore covered by this License.
++Section 6 states terms for distribution of such executables.
++
++  When a "work that uses the Library" uses material from a header file
++that is part of the Library, the object code for the work may be a
++derivative work of the Library even though the source code is not.
++Whether this is true is especially significant if the work can be
++linked without the Library, or if the work is itself a library.  The
++threshold for this to be true is not precisely defined by law.
++
++  If such an object file uses only numerical parameters, data
++structure layouts and accessors, and small macros and small inline
++functions (ten lines or less in length), then the use of the object
++file is unrestricted, regardless of whether it is legally a derivative
++work.  (Executables containing this object code plus portions of the
++Library will still fall under Section 6.)
++
++  Otherwise, if the work is a derivative of the Library, you may
++distribute the object code for the work under the terms of Section 6.
++Any executables containing that work also fall under Section 6,
++whether or not they are linked directly with the Library itself.
++
++  6. As an exception to the Sections above, you may also combine or
++link a "work that uses the Library" with the Library to produce a
++work containing portions of the Library, and distribute that work
++under terms of your choice, provided that the terms permit
++modification of the work for the customer's own use and reverse
++engineering for debugging such modifications.
++
++  You must give prominent notice with each copy of the work that the
++Library is used in it and that the Library and its use are covered by
++this License.  You must supply a copy of this License.  If the work
++during execution displays copyright notices, you must include the
++copyright notice for the Library among them, as well as a reference
++directing the user to the copy of this License.  Also, you must do one
++of these things:
++
++    a) Accompany the work with the complete corresponding
++    machine-readable source code for the Library including whatever
++    changes were used in the work (which must be distributed under
++    Sections 1 and 2 above); and, if the work is an executable linked
++    with the Library, with the complete machine-readable "work that
++    uses the Library", as object code and/or source code, so that the
++    user can modify the Library and then relink to produce a modified
++    executable containing the modified Library.  (It is understood
++    that the user who changes the contents of definitions files in the
++    Library will not necessarily be able to recompile the application
++    to use the modified definitions.)
++
++    b) Use a suitable shared library mechanism for linking with the
++    Library.  A suitable mechanism is one that (1) uses at run time a
++    copy of the library already present on the user's computer system,
++    rather than copying library functions into the executable, and (2)
++    will operate properly with a modified version of the library, if
++    the user installs one, as long as the modified version is
++    interface-compatible with the version that the work was made with.
++
++    c) Accompany the work with a written offer, valid for at
++    least three years, to give the same user the materials
++    specified in Subsection 6a, above, for a charge no more
++    than the cost of performing this distribution.
++
++    d) If distribution of the work is made by offering access to copy
++    from a designated place, offer equivalent access to copy the above
++    specified materials from the same place.
++
++    e) Verify that the user has already received a copy of these
++    materials or that you have already sent this user a copy.
++
++  For an executable, the required form of the "work that uses the
++Library" must include any data and utility programs needed for
++reproducing the executable from it.  However, as a special exception,
++the materials to be distributed need not include anything that is
++normally distributed (in either source or binary form) with the major
++components (compiler, kernel, and so on) of the operating system on
++which the executable runs, unless that component itself accompanies
++the executable.
++
++  It may happen that this requirement contradicts the license
++restrictions of other proprietary libraries that do not normally
++accompany the operating system.  Such a contradiction means you cannot
++use both them and the Library together in an executable that you
++distribute.
++
++  7. You may place library facilities that are a work based on the
++Library side-by-side in a single library together with other library
++facilities not covered by this License, and distribute such a combined
++library, provided that the separate distribution of the work based on
++the Library and of the other library facilities is otherwise
++permitted, and provided that you do these two things:
++
++    a) Accompany the combined library with a copy of the same work
++    based on the Library, uncombined with any other library
++    facilities.  This must be distributed under the terms of the
++    Sections above.
++
++    b) Give prominent notice with the combined library of the fact
++    that part of it is a work based on the Library, and explaining
++    where to find the accompanying uncombined form of the same work.
++
++  8. You may not copy, modify, sublicense, link with, or distribute
++the Library except as expressly provided under this License.  Any
++attempt otherwise to copy, modify, sublicense, link with, or
++distribute the Library is void, and will automatically terminate your
++rights under this License.  However, parties who have received copies,
++or rights, from you under this License will not have their licenses
++terminated so long as such parties remain in full compliance.
++
++  9. You are not required to accept this License, since you have not
++signed it.  However, nothing else grants you permission to modify or
++distribute the Library or its derivative works.  These actions are
++prohibited by law if you do not accept this License.  Therefore, by
++modifying or distributing the Library (or any work based on the
++Library), you indicate your acceptance of this License to do so, and
++all its terms and conditions for copying, distributing or modifying
++the Library or works based on it.
++
++  10. Each time you redistribute the Library (or any work based on the
++Library), the recipient automatically receives a license from the
++original licensor to copy, distribute, link with or modify the Library
++subject to these terms and conditions.  You may not impose any further
++restrictions on the recipients' exercise of the rights granted herein.
++You are not responsible for enforcing compliance by third parties with
++this License.
++
++  11. If, as a consequence of a court judgment or allegation of patent
++infringement or for any other reason (not limited to patent issues),
++conditions are imposed on you (whether by court order, agreement or
++otherwise) that contradict the conditions of this License, they do not
++excuse you from the conditions of this License.  If you cannot
++distribute so as to satisfy simultaneously your obligations under this
++License and any other pertinent obligations, then as a consequence you
++may not distribute the Library at all.  For example, if a patent
++license would not permit royalty-free redistribution of the Library by
++all those who receive copies directly or indirectly through you, then
++the only way you could satisfy both it and this License would be to
++refrain entirely from distribution of the Library.
++
++If any portion of this section is held invalid or unenforceable under any
++particular circumstance, the balance of the section is intended to apply,
++and the section as a whole is intended to apply in other circumstances.
++
++It is not the purpose of this section to induce you to infringe any
++patents or other property right claims or to contest validity of any
++such claims; this section has the sole purpose of protecting the
++integrity of the free software distribution system which is
++implemented by public license practices.  Many people have made
++generous contributions to the wide range of software distributed
++through that system in reliance on consistent application of that
++system; it is up to the author/donor to decide if he or she is willing
++to distribute software through any other system and a licensee cannot
++impose that choice.
++
++This section is intended to make thoroughly clear what is believed to
++be a consequence of the rest of this License.
++
++  12. If the distribution and/or use of the Library is restricted in
++certain countries either by patents or by copyrighted interfaces, the
++original copyright holder who places the Library under this License may add
++an explicit geographical distribution limitation excluding those countries,
++so that distribution is permitted only in or among countries not thus
++excluded.  In such case, this License incorporates the limitation as if
++written in the body of this License.
++
++  13. The Free Software Foundation may publish revised and/or new
++versions of the Lesser General Public License from time to time.
++Such new versions will be similar in spirit to the present version,
++but may differ in detail to address new problems or concerns.
++
++Each version is given a distinguishing version number.  If the Library
++specifies a version number of this License which applies to it and
++"any later version", you have the option of following the terms and
++conditions either of that version or of any later version published by
++the Free Software Foundation.  If the Library does not specify a
++license version number, you may choose any version ever published by
++the Free Software Foundation.
++
++  14. If you wish to incorporate parts of the Library into other free
++programs whose distribution conditions are incompatible with these,
++write to the author to ask for permission.  For software which is
++copyrighted by the Free Software Foundation, write to the Free
++Software Foundation; we sometimes make exceptions for this.  Our
++decision will be guided by the two goals of preserving the free status
++of all derivatives of our free software and of promoting the sharing
++and reuse of software generally.
++
++                            NO WARRANTY
++
++  15. BECAUSE THE LIBRARY IS LICENSED FREE OF CHARGE, THERE IS NO
++WARRANTY FOR THE LIBRARY, TO THE EXTENT PERMITTED BY APPLICABLE LAW.
++EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT HOLDERS AND/OR
++OTHER PARTIES PROVIDE THE LIBRARY "AS IS" WITHOUT WARRANTY OF ANY
++KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE
++IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++PURPOSE.  THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE
++LIBRARY IS WITH YOU.  SHOULD THE LIBRARY PROVE DEFECTIVE, YOU ASSUME
++THE COST OF ALL NECESSARY SERVICING, REPAIR OR CORRECTION.
++
++  16. IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN
++WRITING WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MAY MODIFY
++AND/OR REDISTRIBUTE THE LIBRARY AS PERMITTED ABOVE, BE LIABLE TO YOU
++FOR DAMAGES, INCLUDING ANY GENERAL, SPECIAL, INCIDENTAL OR
++CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OR INABILITY TO USE THE
++LIBRARY (INCLUDING BUT NOT LIMITED TO LOSS OF DATA OR DATA BEING
++RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD PARTIES OR A
++FAILURE OF THE LIBRARY TO OPERATE WITH ANY OTHER SOFTWARE), EVEN IF
++SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH
++DAMAGES.
++
++                     END OF TERMS AND CONDITIONS
++
++           How to Apply These Terms to Your New Libraries
++
++  If you develop a new library, and you want it to be of the greatest
++possible use to the public, we recommend making it free software that
++everyone can redistribute and change.  You can do so by permitting
++redistribution under these terms (or, alternatively, under the terms of the
++ordinary General Public License).
++
++  To apply these terms, attach the following notices to the library.  It is
++safest to attach them to the start of each source file to most effectively
++convey the exclusion of warranty; and each file should have at least the
++"copyright" line and a pointer to where the full notice is found.
++
++    <one line to give the library's name and a brief idea of what it does.>
++    Copyright (C) <year>  <name of author>
++
++    This library is free software; you can redistribute it and/or
++    modify it under the terms of the GNU Lesser General Public
++    License as published by the Free Software Foundation; either
++    version 2.1 of the License, or (at your option) any later version.
++
++    This library is distributed in the hope that it will be useful,
++    but WITHOUT ANY WARRANTY; without even the implied warranty of
++    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++    Lesser General Public License for more details.
++
++    You should have received a copy of the GNU Lesser General Public
++    License along with this library; if not, write to the Free Software
++    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
++    USA
++
++Also add information on how to contact you by electronic and paper mail.
++
++You should also get your employer (if you work as a programmer) or your
++school, if any, to sign a "copyright disclaimer" for the library, if
++necessary.  Here is a sample; alter the names:
++
++  Yoyodyne, Inc., hereby disclaims all copyright interest in the
++  library `Frob' (a library for tweaking knobs) written by James Random
++  Hacker.
++
++  <signature of Ty Coon>, 1 April 1990
++  Ty Coon, President of Vice
++
++That's all there is to it!
+diff --git a/firmware/baseband/horus/comp.h b/firmware/baseband/horus/comp.h
+new file mode 100644
+index 0000000..ffc20c1
+--- /dev/null
++++ b/firmware/baseband/horus/comp.h
+@@ -0,0 +1,38 @@
++/*---------------------------------------------------------------------------*\
++
++  FILE........: comp.h
++  AUTHOR......: David Rowe
++  DATE CREATED: 24/08/09
++
++  Complex number definition.
++
++\*---------------------------------------------------------------------------*/
++
++/*
++  Copyright (C) 2009 David Rowe
++
++  All rights reserved.
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of the GNU Lesser General Public License version 2.1, as
++  published by the Free Software Foundation.  This program is
++  distributed in the hope that it will be useful, but WITHOUT ANY
++  WARRANTY; without even the implied warranty of MERCHANTABILITY or
++  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
++  License for more details.
++
++  You should have received a copy of the GNU Lesser General Public License
++  along with this program; if not, see <http://www.gnu.org/licenses/>.
++*/
++
++#ifndef __COMP__
++#define __COMP__
++
++/* Complex number */
++
++typedef struct {
++  float real;
++  float imag;
++} COMP;
++
++#endif
+diff --git a/firmware/baseband/horus/golay23.c b/firmware/baseband/horus/golay23.c
+new file mode 100644
+index 0000000..158a099
+--- /dev/null
++++ b/firmware/baseband/horus/golay23.c
+@@ -0,0 +1,311 @@
++/*---------------------------------------------------------------------------*\
++
++  FILE........: golay23.c
++  AUTHOR......: Tomas Härdin & David Rowe
++  DATE CREATED: 3 March 2013
++
++  To test:
++
++     src$ gcc golay23.c -o golay23 -Wall -O3 -DGOLAY23_UNITTEST                   && ./golay23
++     src$ gcc golay23.c -o golay23 -Wall -O3 -DGOLAY23_UNITTEST -DRUN_TIME_TABLES && ./golay23
++     src$ gcc golay23.c -o golay23 -Wall -O3 -DGOLAY23_UNITTEST -DNO_TABLES       && ./golay23
++
++  To generate tables:
++     src$ gcc golay23.c -o golay23 -Wall -O3 -DGOLAY23_MAKETABLES                 && ./golay23
++
++\*---------------------------------------------------------------------------*/
++
++/*
++  Copyright (C) 2016 Tomas Härdin & David Rowe
++
++  All rights reserved.
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of the GNU Lesser General Public License version 2.1, as
++  published by the Free Software Foundation.  This program is
++  distributed in the hope that it will be useful, but WITHOUT ANY
++  WARRANTY; without even the implied warranty of MERCHANTABILITY or
++  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
++  License for more details.
++
++  You should have received a copy of the GNU Lesser General Public License
++  along with this program; if not,see <http://www.gnu.org/licenses/>.
++*/
++
++#include <assert.h>
++
++#ifdef GOLAY23_MAKETABLES
++#define RUN_TIME_TABLES
++#endif
++
++#ifndef NO_TABLES
++#ifdef RUN_TIME_TABLES
++int static encoding_table[4096];
++int static decoding_table[2048];
++static int inited = 0;
++#else
++//default is to use precomputed tables
++#include "golayenctable.h"
++#include "golaydectable.h"
++#endif
++#endif
++
++//since we want to avoid bit-reversing inside syndrome() we bit-reverse the polynomial instead
++#define GOLAY_POLYNOMIAL    0xC75   //AE3 reversed
++
++int golay23_syndrome(int c) {
++    //could probably be done slightly smarter, but works
++    int x;
++    for (x = 11; x >= 0; x--) {
++        if (c & ((1<<11) << x)) {
++            c ^= GOLAY_POLYNOMIAL << x;
++        }
++    }
++    return c;
++}
++
++#ifdef __GNUC__
++#define popcount __builtin_popcount
++#elif defined(__MSC_VER)
++#include <intrin.h>
++#define popcount __popcnt
++#else
++static int popcount(unsigned int c) {
++    int ret = 0;
++    while (c) {
++        if (c & 1) {
++            ret++;
++        }
++        c >>= 1;
++    }
++    return ret;
++}
++#endif
++
++#if defined(NO_TABLES) || defined(RUN_TIME_TABLES)
++static int golay23_encode_no_tables(int c) {
++    c <<= 11;
++    return golay23_syndrome(c) | c;
++}
++#endif
++
++#ifdef NO_TABLES
++static int unrotate(unsigned int c, int x) {
++    return ((c << x) & 0x7FFFFF) | (c >> (23 - x));
++}
++
++static int golay23_decode_no_tables(int c) {
++    //TODO: optimize?
++    int x;
++    c = unrotate(c, 12);
++
++    for (x = 0; x < 23; x++) {
++        int t;
++        int s = golay23_syndrome(c);
++
++        if (popcount(s) <= 3) {
++            return unrotate(c ^ s, x) & 0xFFF;
++        }
++
++        for (t = 0; t < 23; t++) {
++            int c2 = c ^ (1 << t);
++            int s = golay23_syndrome(c2);
++
++            if (popcount(s) <= 2) {
++                return unrotate(c2 ^ s, x) & 0xFFF;
++            }
++        }
++
++        //rotate
++        c = (c >> 1) | ((c & 1) << 22);
++    }
++
++    //shouldn't reach here..
++    assert("Something is wrong with golay23_decode_no_tables()..");
++    return c & 0xFFF;
++}
++#endif
++
++void golay23_init(void) {
++#ifdef RUN_TIME_TABLES
++    int x, y, z;
++    inited = 1;
++    for (x = 0; x < 4096; x++) {
++        encoding_table[x] = golay23_encode_no_tables(x);
++    }
++
++    decoding_table[0] = 0;
++    //1-bit errors
++    for (x = 0; x < 23; x++) {
++        int d = 1<<x;
++        decoding_table[golay23_syndrome(d)] = d;
++    }
++    //2-bit errors
++    for (x = 0; x < 22; x++) {
++        for (y = x+1; y < 23; y++) {
++            int d = (1<<x) | (1<<y);
++            decoding_table[golay23_syndrome(d)] = d;
++        }
++    }
++    //3-bit errors
++    for (x = 0; x < 21; x++) {
++        for (y = x+1; y < 22; y++) {
++            for (z = y+1; z < 23; z++) {
++                int d = (1<<x) | (1<<y) | (1<<z);
++                decoding_table[golay23_syndrome(d)] = d;
++            }
++        }
++    }
++#endif
++}
++
++int  golay23_encode(int c) {
++    assert(c >= 0 && c <= 0xFFF);
++#ifdef RUN_TIME_TABLES
++    assert(inited);
++#endif
++
++#ifdef NO_TABLES
++    return golay23_encode_no_tables(c);
++#else
++    return encoding_table[c];
++#endif
++}
++
++int  golay23_decode(int c) {
++    assert(c >= 0 && c <= 0x7FFFFF);
++#ifdef RUN_TIME_TABLES
++    assert(inited);
++#endif
++
++#ifdef NO_TABLES
++    //duplicate old golay23_decode()'s shift
++    return unrotate(golay23_decode_no_tables(c), 11);
++#else
++    //message is shifted 11 places left in the return value
++    return c ^ decoding_table[golay23_syndrome(c)];
++#endif
++}
++
++int  golay23_count_errors(int recd_codeword, int corrected_codeword) {
++    return popcount(recd_codeword ^ corrected_codeword);
++}
++
++/**
++ * Table generation and testing code below
++ */
++
++#ifdef GOLAY23_MAKETABLES
++#include <stdio.h>
++
++int main() {
++    int x;
++    //generate and dump
++    golay23_init();
++
++    FILE *enc = fopen("golayenctable.h", "w");
++    FILE *dec = fopen("golaydectable.h", "w");
++
++    fprintf(enc, "/* Generated by golay23.c -DGOLAY23_MAKETABLE */\n\
++\n\
++const int static encoding_table[]={\n");
++    for (x = 0; x < 4096; x++) {
++        fprintf(enc, x < 4095 ? "  0x%x,\n" : "  0x%x\n", encoding_table[x]);
++    }
++    fprintf(enc, "};\n");
++
++    fprintf(dec, "/* Generated by golay23.c -DGOLAY23_MAKETABLE */\n\
++\n\
++const int static decoding_table[]={\n");
++    for (x = 0; x < 2048; x++) {
++        fprintf(dec, x < 2047 ? "  0x%x,\n" : "  0x%x\n", decoding_table[x]);
++    }
++    fprintf(dec, "};\n");
++
++    fclose(enc);
++    fclose(dec);
++
++    return 0;
++}
++
++#elif defined(GOLAY23_UNITTEST)
++#include <stdio.h>
++#include <stdlib.h>
++#include <memory.h>
++
++int main() {
++    int c;
++
++    golay23_init();
++
++    //keep track of whether every single codeword has been checked
++    char *checkmask = malloc(1<<23);
++    memset(checkmask, 0, 1<<23);
++
++    //step through all possible messages
++    for (c = 0; c < (1<<12); c++) {
++        int g23 = golay23_encode(c);
++        int x,y,z;
++        checkmask[g23] = 1;
++        int c2 = golay23_decode(g23) >> 11;
++
++        printf("%03x -> %06x %03x\n", c, g23, c2);
++
++        if (c != c2) {
++            printf("Bad!\n");
++            exit(1);
++        }
++
++        //test the code by flipping every combination of one, two and three bits
++        for (x = 0; x < 23; x++) {
++            int flipped = g23 ^ (1<<x);
++            checkmask[flipped] = 1;
++            int c2 = golay23_decode(flipped) >> 11;
++            if (c != c2) {
++                printf("Bad!\n");
++                
++                exit(1);
++            }
++        }
++        
++        for (x = 0; x < 22; x++) {
++            for (y = x+1; y < 23; y++) {
++                int flipped = g23 ^ (1<<x) ^ (1<<y);
++                checkmask[flipped] = 1;
++                int c2 = golay23_decode(flipped) >> 11;
++                if (c != c2) {
++                    printf("Bad!\n");
++                    
++                    exit(1);
++                }
++            }
++        }
++        
++        for (x = 0; x < 21; x++) {
++            for (y = x+1; y < 22; y++) {
++                for (z = y+1; z < 23; z++) {
++                    int flipped = g23 ^ (1<<x) ^ (1<<y) ^ (1<<z);
++                    checkmask[flipped] = 1;
++                    int c2 = golay23_decode(flipped) >> 11;
++                    if (c != c2) {
++                        printf("Bad!\n");
++                        exit(1);
++                    }
++                }
++            }
++        }
++    }
++
++    //did we check every codeword?
++    for (c = 0; c < (1<<23); c++) {
++        if (checkmask[c] != 1) {
++            printf("%06x unchecked!\n", c);
++            exit(1);
++        }
++    }
++
++    printf("Everything checks out\n");
++    free(checkmask);
++    return 0;
++}
++#endif
+diff --git a/firmware/baseband/horus/golay23.h b/firmware/baseband/horus/golay23.h
+new file mode 100644
+index 0000000..25502c6
+--- /dev/null
++++ b/firmware/baseband/horus/golay23.h
+@@ -0,0 +1,45 @@
++/*---------------------------------------------------------------------------*\
++
++  FILE........: golay23.h
++  AUTHOR......: David Rowe
++  DATE CREATED: 3 March 2013
++
++  Header file for Golay FEC.
++
++\*---------------------------------------------------------------------------*/
++
++/*
++  Copyright (C) 2013 David Rowe
++
++  All rights reserved.
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of the GNU Lesser General Public License version 2.1, as
++  published by the Free Software Foundation.  This program is
++  distributed in the hope that it will be useful, but WITHOUT ANY
++  WARRANTY; without even the implied warranty of MERCHANTABILITY or
++  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
++  License for more details.
++
++  You should have received a copy of the GNU Lesser General Public License
++  along with this program; if not, see <http://www.gnu.org/licenses/>.
++*/
++
++#ifndef __GOLAY23__
++#define __GOLAY23__
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++void golay23_init(void);
++int  golay23_encode(int data);
++int  golay23_decode(int received_codeword);
++int  golay23_count_errors(int recd_codeword, int corrected_codeword);
++int  golay23_syndrome(int c);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif
+diff --git a/firmware/baseband/horus/horus_l2.c b/firmware/baseband/horus/horus_l2.c
+new file mode 100644
+index 0000000..96cb0d1
+--- /dev/null
++++ b/firmware/baseband/horus/horus_l2.c
+@@ -0,0 +1,1342 @@
++/*---------------------------------------------------------------------------*\
++
++  FILE........: horus_l2.c
++  AUTHOR......: David Rowe
++  DATE CREATED: Dec 2015
++
++  Horus telemetry layer 2 processing.  Takes an array of 8 bit payload
++  data, generates parity bits for a (23,12) Golay code, interleaves
++  data and parity bits, pre-pends a Unique Word for modem sync.
++  Caller is responsible for providing storage for output packet.
++
++  1/ Unit test on a PC:
++
++     $ gcc horus_l2.c golay23.c H_128_384_23.c H_256_768_22.c mpdecode_core.c phi0.c -o horus_l2 -Wall -DHORUS_L2_UNITTEST
++     $ ./horus_l2
++
++     test 0: 22 bytes of payload data BER: 0.00 errors: 0
++     test 0: 22 bytes of payload data BER: 0.01 errors: 0
++     test 0: 22 bytes of payload data BER: 0.05 errors: 0
++     test 0: 22 bytes of payload data BER: 0.10 errors: 7
++     
++     This indicates it's correcting all channel errors for 22 bytes of
++     payload data, at bit error rate (BER) of 0, 0.01, 0.05.  It falls
++     over at a BER of 0.10 which is expected.
++
++  2/ To build with just the tx function, ie for linking with the payload
++  firmware:
++
++    $ gcc horus_l2.c golay23.c -c -Wall
++    
++  By default the RX side is #ifdef-ed out, leaving the minimal amount
++  of code for tx.
++
++  3/ Generate some tx_bits as input for testing with fsk_horus:
++ 
++    $ gcc horus_l2.c golay23.c -o horus_l2 -Wall -DGEN_TX_BITS -DSCRAMBLER -DINTERLEAVER
++    $ ./horus_l2
++    $ more ../octave/horus_tx_bits_binary.txt
++
++  4/ Streaming test bits to stdout, for 'live' testing with fsk_mod and horus_demod:
++
++    $ gcc horus_l2.c golay23.c H_128_384_23.c H_256_768_22.c mpdecode_core.c phi0.c -o horus_l2 -Wall -DGEN_TX_BITSTREAM -DSCRAMBLER -DINTERLEAVER
++    $ cp horus_l2 ../build/src/
++    $ cd ../build/src/
++    $ ./horus_l2 100 0 | ./fsk_mod 4 48000 100 750 250 - - | ./horus_demod -m binary - -
++
++    Testing LDPC encode/decode
++    $ ./horus_l2 100 1 | ../build/src/fsk_mod 2 48000 100 750 250 - - | ../build/src/cohpsk_ch - - -26 --Fs 48000 --ssbfilt 0 | ../build/src/horus_demod -m 256bit --tonespacing=250 - - | wc -l
++   
++  5/ Unit testing interleaver:
++
++    $ gcc horus_l2.c golay23.c H_128_384_23.c H_256_768_22.c mpdecode_core.c phi0.c -o horus_l2 -Wall -DINTERLEAVER -DTEST_INTERLEAVER -DSCRAMBLER
++
++  6/ Compile for use as decoder called by fsk_horus.m and fsk_horus_stream.m:
++
++    $ gcc horus_l2.c golay23.c -o horus_l2 -Wall -DDEC_RX_BITS -DHORUS_L2_RX
++
++\*---------------------------------------------------------------------------*/
++
++#include <assert.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <stdint.h>
++#include <math.h>
++#include "mpdecode_core.h"
++#include "horus_l2.h"
++#include "golay23.h"
++//#include "H_128_384_23.h"
++//#include "H_256_768_22.h"
++
++#ifdef HORUS_L2_UNITTEST
++#define HORUS_L2_RX
++#endif
++
++static const char uw[] = {'$','$'}; // UW for Horus Binary v1 and v2 Golay modes
++//static const char uw_v2[] =  {0x96, 0x69, 0x69, 0x96}; // UW for Horus Binary v2 modes - DEPRECATED.
++
++/* Function Prototypes ------------------------------------------------*/
++
++#ifdef INTERLEAVER
++static void interleave(unsigned char *inout, int nbytes, int dir);
++#endif
++#ifdef SCRAMBLER
++static void scramble(unsigned char *inout, int nbytes);
++#endif
++
++/* Functions ----------------------------------------------------------*/
++
++/*
++   We are using a Golay (23,12) code which has a codeword 23 bits
++   long.  The tx packet format is:
++
++      | Unique Word | payload data bits | parity bits |
++
++   This function works out how much storage the caller of
++   horus_l2_encode_tx_packet() will need to store the tx packet
++ */
++
++int horus_l2_get_num_tx_data_bytes(int num_payload_data_bytes) {
++    int num_payload_data_bits, num_golay_codewords;
++    int num_tx_data_bits, num_tx_data_bytes;
++    
++    num_payload_data_bits = num_payload_data_bytes*8;
++    num_golay_codewords = num_payload_data_bits/12;
++    if (num_payload_data_bits % 12) /* round up to 12 bits, may mean some unused bits */
++        num_golay_codewords++;
++
++    num_tx_data_bits = sizeof(uw)*8 + num_payload_data_bits + num_golay_codewords*11;
++    num_tx_data_bytes = num_tx_data_bits/8;
++    if (num_tx_data_bits % 8) /* round up to nearest byte, may mean some unused bits */
++        num_tx_data_bytes++;
++    
++    #ifdef DEBUG0
++    fprintf(stderr, "\nnum_payload_data_bytes: %d\n", num_payload_data_bytes);
++    fprintf(stderr, "num_golay_codewords...: %d\n", num_golay_codewords);
++    fprintf(stderr, "num_tx_data_bits......: %d\n", num_tx_data_bits);
++    fprintf(stderr, "num_tx_data_bytes.....: %d\n\n", num_tx_data_bytes);
++    #endif
++
++    return num_tx_data_bytes;
++}
++
++void horus_l2_init(void) {
++    golay23_init();
++}
++
++/*
++  Takes an array of payload data bytes, prepends a unique word and appends
++  parity bits.
++
++  The encoder will run on the payload on a small 8-bit uC.  As we are
++  memory constrained so we do a lot of burrowing for bits out of
++  packed arrays, and don't use a LUT for Golay encoding.  Hopefully it
++  will run fast enough.  This was quite difficult to get going,
++  suspect there is a better way to write this.  Oh well, have to start
++  somewhere.
++ */
++
++int horus_l2_encode_tx_packet(unsigned char *output_tx_data,
++                              unsigned char *input_payload_data,
++                              int            num_payload_data_bytes)
++{
++    int            num_tx_data_bytes, num_payload_data_bits;
++    unsigned char *pout = output_tx_data;
++    int            ninbit, ningolay, nparitybits;
++    int32_t        ingolay, paritybyte, inbit, golayparity;
++    int            ninbyte, shift, golayparitybit, i;
++
++    num_tx_data_bytes = horus_l2_get_num_tx_data_bytes(num_payload_data_bytes);
++    memcpy(pout, uw, sizeof(uw)); pout += sizeof(uw);
++    memcpy(pout, input_payload_data, num_payload_data_bytes); pout += num_payload_data_bytes;
++
++    /* Read input bits one at a time.  Fill input Golay codeword.  Find output Golay codeword.
++       Write this to parity bits.  Write parity bytes when we have 8 parity bits.  Bits are
++       written MSB first. */
++
++    num_payload_data_bits = num_payload_data_bytes*8;
++    ninbit = 0;
++    ingolay = 0;
++    ningolay = 0;
++    paritybyte = 0;
++    nparitybits = 0;
++
++    while (ninbit < num_payload_data_bits) {
++
++        /* extract input data bit */
++
++        ninbyte = ninbit/8;
++        shift = 7 - (ninbit % 8);
++        inbit = (input_payload_data[ninbyte] >> shift) & 0x1;
++        #ifdef DEBUG1
++        fprintf(stderr, "inbit %d ninbyte: %d inbyte: 0x%02x inbit: %d\n", 
++                ninbit, ninbyte, input_payload_data[ninbyte], inbit);
++        #endif
++        ninbit++;
++
++        /* build up input golay codeword */
++
++        ingolay = ingolay | inbit;
++        ningolay++;
++
++        /* when we get 12 bits do a Golay encode */
++
++        if (ningolay % 12) {
++            ingolay <<= 1;
++        }
++        else {
++            #ifdef DEBUG0
++            fprintf(stderr, "  ningolay: %d ingolay: 0x%04x\n", ningolay, ingolay);
++            #endif
++            golayparity = golay23_syndrome(ingolay<<11);
++            ingolay = 0;
++
++            #ifdef DEBUG0
++            fprintf(stderr, "  golayparity: 0x%04x\n", golayparity);
++            #endif
++
++            /* write parity bits to output data */
++
++            for (i=0; i<11; i++) {
++                golayparitybit = (golayparity >> (10-i)) & 0x1;
++                paritybyte = paritybyte | golayparitybit;
++                #ifdef DEBUG0
++                fprintf(stderr, "    i: %d golayparitybit: %d paritybyte: 0x%02x\n", 
++                        i, golayparitybit, paritybyte);
++                #endif
++                nparitybits++;
++                if (nparitybits % 8) {
++                   paritybyte <<= 1;
++                }
++                else {
++                    /* OK we have a full byte ready */
++                    *pout = paritybyte;
++                    #ifdef DEBUG0
++                    fprintf(stderr,"      Write paritybyte: 0x%02x\n", paritybyte);
++                    #endif
++                    pout++;
++                    paritybyte = 0;
++                }
++            }
++        }
++    } /* while(.... */
++
++
++    /* Complete final Golay encode, we may have partially finished ingolay, paritybyte */
++
++    #ifdef DEBUG0
++    fprintf(stderr, "finishing up .....\n");
++    #endif
++
++    if (ningolay % 12) {
++        ingolay >>= 1;
++        golayparity = golay23_syndrome(ingolay<<12);
++        #ifdef DEBUG0
++        fprintf(stderr, "  ningolay: %d ingolay: 0x%04x\n", ningolay, ingolay);
++        fprintf(stderr, "  golayparity: 0x%04x\n", golayparity);
++        #endif
++
++        /* write parity bits to output data */
++
++        for (i=0; i<11; i++) {
++            golayparitybit = (golayparity >> (10 - i)) & 0x1;
++            paritybyte = paritybyte | golayparitybit;
++            #ifdef DEBUG1
++            fprintf(stderr, "    i: %d golayparitybit: %d paritybyte: 0x%02x\n", 
++                    i, golayparitybit, paritybyte);
++            #endif
++            nparitybits++;
++            if (nparitybits % 8) {
++                paritybyte <<= 1;
++            }
++            else {
++                /* OK we have a full byte ready */
++                *pout++ = (unsigned char)paritybyte;
++                #ifdef DEBUG0
++                fprintf(stderr,"      Write paritybyte: 0x%02x\n", paritybyte);
++                #endif
++                paritybyte = 0;
++            }
++        }
++    }
++ 
++    /* and final, partially complete, parity byte */
++
++    if (nparitybits % 8) {
++        paritybyte <<= 7 - (nparitybits % 8);  // use MS bits first
++        *pout++ = (unsigned char)paritybyte;
++        #ifdef DEBUG0
++        fprintf(stderr,"      Write last paritybyte: 0x%02x nparitybits: %d \n", paritybyte, nparitybits);
++        #endif
++    }
++
++    #ifdef DEBUG0
++    fprintf(stderr, "\npout - output_tx_data: %ld num_tx_data_bytes: %d\n",
++            pout - output_tx_data, num_tx_data_bytes);
++    #endif
++    assert(pout == (output_tx_data + num_tx_data_bytes));
++
++    /* optional interleaver - we dont interleave UW */
++
++    #ifdef INTERLEAVER
++    interleave(&output_tx_data[sizeof(uw)], num_tx_data_bytes-2, 0);
++    #endif
++
++    /* optional scrambler to prevent long strings of the same symbol
++       which upsets the modem - we dont scramble UW */
++
++    #ifdef SCRAMBLER
++    scramble(&output_tx_data[sizeof(uw)], num_tx_data_bytes-2);
++    #endif
++
++    return num_tx_data_bytes;
++}
++
++
++#ifdef HORUS_L2_RX
++void horus_l2_decode_rx_packet(unsigned char *output_payload_data,
++                               unsigned char *input_rx_data,
++                               int            num_payload_data_bytes)
++{
++    int            num_payload_data_bits;
++    unsigned char *pout = output_payload_data;
++    unsigned char *pin  = input_rx_data;
++    int            ninbit, ingolay, ningolay, paritybyte, nparitybits;
++    int            ninbyte, shift, inbit, golayparitybit, i, outbit, outbyte, noutbits, outdata;
++    #if defined(SCRAMBLER) || defined(INTERLEAVER)
++    int num_tx_data_bytes = horus_l2_get_num_tx_data_bytes(num_payload_data_bytes);
++    #endif
++    
++    /* optional scrambler and interleaver - we dont interleave UW */
++
++    #ifdef SCRAMBLER
++    scramble(&input_rx_data[sizeof(uw)], num_tx_data_bytes-2);
++    #endif
++
++    #ifdef INTERLEAVER
++    interleave(&input_rx_data[sizeof(uw)], num_tx_data_bytes-2, 1);
++    #endif
++
++    pin = input_rx_data + sizeof(uw) + num_payload_data_bytes;
++
++    /* Read input data bits one at a time.  When we have 12 read 11 parity bits. Golay decode.
++       Write decoded (output data) bits every time we have 8 of them. */
++
++    num_payload_data_bits = num_payload_data_bytes*8;
++    ninbit = 0;
++    ingolay = 0;
++    ningolay = 0;
++    nparitybits = 0;
++    paritybyte = *pin++;
++    #ifdef DEBUG0
++    fprintf(stderr,"  Read paritybyte: 0x%02x\n", paritybyte);
++    #endif
++    pout = output_payload_data;
++    noutbits = 0;
++    outbyte = 0;
++
++    while (ninbit < num_payload_data_bits) {
++
++        /* extract input data bit */
++
++        ninbyte = ninbit/8 + sizeof(uw);
++        shift = 7 - (ninbit % 8);
++        inbit = (input_rx_data[ninbyte] >> shift) & 0x1;
++        #ifdef DEBUG1
++        fprintf(stderr, "inbit %d ninbyte: %d inbyte: 0x%02x inbit: %d\n", 
++                ninbit, ninbyte, input_rx_data[ninbyte], inbit);
++        #endif
++        ninbit++;
++
++        /* build up golay codeword */
++
++        ingolay = ingolay | inbit;
++        ningolay++;
++        ingolay <<= 1;
++
++        /* when we get 12 data bits start reading parity bits */
++
++        if ((ningolay % 12) == 0) {
++            #ifdef DEBUG0
++            fprintf(stderr, "  ningolay: %d ingolay: 0x%04x\n", ningolay, ingolay>>1);
++            #endif
++            for (i=0; i<11; i++) {
++                shift = 7 - (nparitybits % 8);
++                golayparitybit = (paritybyte >> shift) & 0x1;
++                ingolay |= golayparitybit;
++                if (i != 10)
++                    ingolay <<=1;
++                nparitybits++;
++                if ((nparitybits % 8) == 0) {
++                    /* OK grab a new byte */
++                    paritybyte = *pin++;
++                    #ifdef DEBUG0
++                    fprintf(stderr,"  Read paritybyte: 0x%02x\n", paritybyte);
++                    #endif
++                }
++            }
++
++            #ifdef DEBUG0
++            fprintf(stderr, "  golay code word: 0x%04x\n", ingolay);
++            fprintf(stderr, "  golay decode...: 0x%04x\n", golay23_decode(ingolay));
++            #endif
++           
++            /* write decoded/error corrected bits to output payload data */
++
++            outdata = golay23_decode(ingolay) >> 11;
++            #ifdef DEBUG0
++            fprintf(stderr, "  outdata...: 0x%04x\n", outdata);
++            #endif
++
++            for(i=0; i<12; i++) {   
++                shift = 11 - i;
++                outbit = (outdata >> shift) & 0x1;
++                outbyte |= outbit;
++                noutbits++;
++                if (noutbits % 8) {
++                    outbyte <<= 1;
++                }
++                else {
++                    #ifdef DEBUG0
++                    fprintf(stderr, "  output payload byte: 0x%02x\n", outbyte);
++                    #endif
++                    *pout++ = outbyte;
++                    outbyte = 0;
++                }
++            }
++
++            ingolay = 0;
++        }
++    } /* while(.... */
++
++
++    #ifdef DEBUG0
++    fprintf(stderr, "finishing up .....\n");
++    #endif
++
++    /* Complete final Golay decode  */
++
++    int golayparity = 0;
++    if (ningolay % 12) {
++        for (i=0; i<11; i++) {
++            shift = 7 - (nparitybits % 8);
++            golayparitybit = (paritybyte >> shift) & 0x1;
++            golayparity |= golayparitybit;
++            if (i != 10)
++                golayparity <<=1;
++            nparitybits++;
++            if ((nparitybits % 8) == 0) {
++                /* OK grab a new byte */
++                paritybyte = *pin++;
++                #ifdef DEBUG0
++                fprintf(stderr,"  Read paritybyte: 0x%02x\n", paritybyte);
++                #endif
++            }
++        }
++
++        ingolay >>= 1;
++        int codeword = (ingolay<<12) + golayparity;
++        #ifdef DEBUG0
++        fprintf(stderr, "  ningolay: %d ingolay: 0x%04x\n", ningolay, ingolay);
++        fprintf(stderr, "  golay code word: 0x%04x\n", codeword);
++        fprintf(stderr, "  golay decode...: 0x%04x\n", golay23_decode(codeword));
++        #endif
++
++        outdata = golay23_decode(codeword) >> 11;
++        #ifdef DEBUG0
++        fprintf(stderr, "  outdata...: 0x%04x\n", outdata);
++        fprintf(stderr, "  num_payload_data_bits: %d noutbits: %d\n", num_payload_data_bits, noutbits);
++        #endif
++
++        /* write final byte */
++
++        int ntogo = num_payload_data_bits - noutbits;
++        for(i=0; i<ntogo; i++) {   
++            shift = ntogo - i;
++            outbit = (outdata >> shift) & 0x1;
++            outbyte |= outbit;
++            noutbits++;
++            if (noutbits % 8) {
++                outbyte <<= 1;
++            }
++            else {
++                #ifdef DEBUG0
++                fprintf(stderr, "  output payload byte: 0x%02x\n", outbyte);
++                #endif
++                *pout++ = outbyte;
++                outbyte = 0;
++            }
++        }
++    }
++
++    #ifdef DEBUG0
++    fprintf(stderr, "\npin - output_payload_data: %ld num_payload_data_bytes: %d\n",
++            pout - output_payload_data, num_payload_data_bytes);
++    #endif
++
++    assert(pout == (output_payload_data + num_payload_data_bytes));
++
++}
++#endif
++
++#ifdef INTERLEAVER
++
++// from https://github.com/drowe67/codec2/blob/96e8a19c2487fd83bd981ce570f257aef42618f9/src/gp_interleaver.c#L39-L40
++int is_prime(int x) {
++  for (int i = 2; i < x; i++) {
++    if ((x % i) == 0) return 0;
++  }
++  return 1;
++}
++
++int next_prime(int x) {
++  x++;
++  while (is_prime(x) == 0) x++;
++  return x;
++}
++
++int choose_interleaver_b(int Nbits) {
++  int b = floor(Nbits / 1.62);
++  b = next_prime(b);
++  return b;
++}
++
++void interleave(unsigned char *inout, int nbytes, int dir)
++{   
++    /* note: to work on small uCs (e.g. AVR) needed to declare specific words sizes */
++    uint16_t nbits = (uint16_t)nbytes*8;
++    uint32_t i, j, n, ibit, ibyte, ishift, jbyte, jshift;
++    uint32_t b;
++    unsigned char out[nbytes];
++
++    memset(out, 0, nbytes);
++
++    switch(nbytes)
++    {
++        case 43: // horus v1
++            b = 337;
++            break;
++        case 63: // horus v2
++            b = 389;
++            break;
++        default: // everything else (including horus v3)
++            b = choose_interleaver_b(nbits);
++    }
++
++    // fprintf(stderr,"n: %d b: %d bits: %d\n",nbytes, b, nbits);
++
++
++    for(n=0; n<nbits; n++) {
++
++        /*
++          "On the Analysis and Design of Good Algebraic Interleavers", Xie et al,eq (5)
++        */
++
++        i = n;
++        j = (b*i) % nbits; /* note these all need to be 32-bit ints to make multiply work without overflow */
++        
++        if (dir) {
++            uint16_t tmp = j;
++            j = i;
++            i = tmp;
++        }
++        
++        #ifdef DEBUG0
++        printf("i: %d j: %d\n",i, j);
++        #endif
++
++        /* read bit i and write to bit j postion */
++
++        ibyte = i/8;
++        ishift = i%8;
++        ibit = (inout[ibyte] >> ishift) & 0x1;
++
++        jbyte = j/8;
++        jshift = j%8;
++
++        /* write jbit to ibit position */
++
++        out[jbyte] |= ibit << jshift; // replace with i-th bit
++        //out[ibyte] |= ibit << ishift; // replace with i-th bit
++    }
++ 
++    memcpy(inout, out, nbytes);
++
++    #ifdef DEBUG0
++    printf("\nInterleaver Out:\n");
++    for (i=0; i<nbytes; i++)
++        printf("%02d 0x%02x\n", i, inout[i]);
++    #endif
++}
++#endif
++
++
++#ifdef TEST_INTERLEAVER
++int main(void) {
++    int nbytes = 43;
++    //int nbytes = 63; // v2 large packet
++    unsigned char inout[nbytes];
++    unsigned char inter[nbytes];
++    unsigned char incopy[nbytes];
++    int i;
++
++    /* copy of input for later comp   */
++
++    for(i=0; i<nbytes; i++)
++        inout[i] = incopy[i] = rand() & 0xff;    
++    
++    interleave(inout, nbytes, 0);    /* interleave                     */
++    memcpy(inter, inout, nbytes);    /* snap shot of interleaved bytes */
++    interleave(inout, nbytes, 1);    /* de-interleave                  */
++
++    /* all ones in last col means it worked! */
++
++    for(i=0; i<nbytes; i++) {
++        printf("%d 0x%02x 0x%02x 0x%02x %d\n", 
++               i, incopy[i], inter[i], inout[i],  incopy[i] == inout[i]);
++        assert(incopy[i] == inout[i]);
++    }
++    printf("Interleaver tested OK!\n");
++
++    return 0;
++}
++#endif
++
++
++#ifdef SCRAMBLER
++
++/* 16 bit DVB additive scrambler as per Wikpedia example */
++
++void scramble(unsigned char *inout, int nbytes)
++{
++    int nbits = nbytes*8;
++    int i, ibit, ibits, ibyte, ishift, mask;
++    uint16_t scrambler = 0x4a80;  /* init additive scrambler at start of every frame */
++    uint16_t scrambler_out;
++
++    /* in place modification of each bit */
++
++    for(i=0; i<nbits; i++) {
++
++        scrambler_out = ((scrambler & 0x2) >> 1) ^ (scrambler & 0x1);
++
++        /* modify i-th bit by xor-ing with scrambler output sequence */
++
++        ibyte = i/8;
++        ishift = i%8;
++        ibit = (inout[ibyte] >> ishift) & 0x1;
++        ibits = ibit ^ scrambler_out;                  // xor ibit with scrambler output
++
++        mask = 1 << ishift;
++        inout[ibyte] &= ~mask;                  // clear i-th bit
++        inout[ibyte] |= ibits << ishift;         // set to scrambled value
++
++        /* update scrambler */
++
++        scrambler >>= 1;
++        scrambler |= scrambler_out << 14;
++
++        #ifdef DEBUG0
++        printf("i: %02d ibyte: %d ishift: %d ibit: %d ibits: %d scrambler_out: %d\n", 
++               i, ibyte, ishift, ibit, ibits, scrambler_out);
++        #endif
++
++    }
++
++    #ifdef DEBUG0
++    printf("\nScrambler Out:\n");
++    for (i=0; i<nbytes; i++)
++        printf("%02d 0x%02x\n", i, inout[i]);
++    #endif
++}
++#endif
++
++#ifdef HORUS_L2_UNITTEST
++
++/*
++  Test function to construct a packet of payload data, encode, add
++  some bit errors, decode, count errors.
++*/
++
++int test_sending_bytes(int nbytes, float ber, int error_pattern) {
++    unsigned char input_payload[nbytes];
++    int num_tx_data_bytes = horus_l2_get_num_tx_data_bytes(sizeof(input_payload));
++    unsigned char tx[num_tx_data_bytes];
++    unsigned char output_payload[sizeof(input_payload)];
++    int b, nbiterrors = 0;
++    int i;
++
++    for(i=0; i<nbytes; i++)
++        input_payload[i] = i;
++
++    horus_l2_encode_tx_packet(tx, input_payload, sizeof(input_payload));
++
++    #ifdef DEBUG0
++    fprintf(stderr, "\nTx Data:\n");
++    for(i=0; i<num_tx_data_bytes; i++)
++        fprintf(stderr, "  %02d 0x%02x\n", i, tx[i]);
++    #endif
++
++    /* insert random bit errors */
++
++    if (error_pattern == 0) {
++        float r;
++        for(i=0; i<num_tx_data_bytes; i++) {
++            for (b=0; b<8; b++) {
++                r = (float)rand()/RAND_MAX;
++                if (r < ber) {
++                    unsigned char mask = (1<<b);
++                    #ifdef DEBUG1
++                    fprintf("mask: 0x%x tx[%d] = 0x%x ", mask, i, tx[i]);
++                    #endif
++                    tx[i] ^= mask;
++                    #ifdef DEBUG1
++                    fprintf("0x%x\n", tx[i]);
++                    #endif
++                    nbiterrors++;
++                }
++            }
++        }
++    }
++
++    /* insert and error burst */
++
++    if (error_pattern == 1) {
++        tx[2] ^= 0xff;
++        tx[3] ^= 0xff;
++    }
++
++    /* insert 1 error every 12 bits, this gives up to 3 errors per 23
++       bit codeword, which is the limit of the code */
++
++    if (error_pattern == 2) {
++        int bn = 0;
++        for(i=0; i<num_tx_data_bytes; i++) {
++            for (b=0; b<8; b++) {
++                bn++;
++                if ((bn % 12) == 0) {
++                    unsigned char mask = (1<<(7-b));
++                    #ifdef DEBUG1
++                    fprintf("mask: 0x%x tx[%d] = 0x%x ", mask, i, tx[i]);
++                    #endif
++                    tx[i] ^= mask;
++                    #ifdef DEBUG1
++                    fprintf("0x%x\n", tx[i]);
++                    #endif
++                    nbiterrors++;
++                }
++            }
++        }
++    }
++
++    #ifdef DEBUG0
++    fprintf(stderr, "\nTx Data after errors:\n");
++    for(i=0; i<num_tx_data_bytes; i++)
++        fprintf(stderr, "  %02d 0x%02x\n", i, tx[i]);
++    #endif
++
++    #ifdef DEBUG0
++    fprintf(stderr, "nbiterrors: %d BER: %3.2f\n", nbiterrors, (float)nbiterrors/(num_tx_data_bytes*8));
++    #endif
++
++    golay23_init();
++    horus_l2_decode_rx_packet(output_payload, tx, sizeof(input_payload));
++
++    #ifdef DEBUG0
++    fprintf(stderr, "\nOutput Payload:\n");
++    for(i=0; i<sizeof(input_payload); i++)
++        fprintf(stderr, "  %02d 0x%02x\n", i, output_payload[i]);
++    #endif
++
++    /* count bit errors */
++
++    int nerr = 0;
++    for(i=0; i<nbytes; i++) {
++        int error_pattern = input_payload[i] ^ output_payload[i];
++        for(b=0; b<8; b++)
++            nerr += (error_pattern>>b) & 0x1;
++    }
++    
++    return nerr;
++}
++
++/* unit test designed to run on a PC */
++
++int main(void) {
++    int num_tx_data_bytes_v1 = horus_l2_get_num_tx_data_bytes(22);
++    printf("Horus v1 length packets (22 bytes uncoded, %d bytes coded)\n", num_tx_data_bytes_v1);
++    printf("test 0: BER: 0.00 ...........: %d\n", test_sending_bytes(22, 0.00, 0));
++    printf("test 1: BER: 0.01 ...........: %d\n", test_sending_bytes(22, 0.01, 0));
++    printf("test 2: BER: 0.05 ...........: %d\n", test_sending_bytes(22, 0.05, 0));
++
++    /* we expect this always to fail, as chance of > 3 errors/codeword is high */
++
++    printf("test 3: BER: 0.10 ...........: %d\n", test_sending_bytes(22, 0.10, 0));
++
++    /* -DINTERLEAVER will make this puppy pass */
++
++    printf("test 4: 8 bit burst error....: %d\n", test_sending_bytes(22, 0.00, 1));
++
++    /* Insert 2 errors in every codeword, the maximum correction
++       capability of a Golay (23,12) code. note this one will fail
++       with -DINTERLEAVER, as we can't guarantee <= 3 errors per
++       codeword after interleaving */
++
++    printf("test 5: 1 error every 12 bits: %d\n", test_sending_bytes(22, 0.00, 2));
++
++    int num_tx_data_bytes_v2_16 = horus_l2_get_num_tx_data_bytes(16);
++    printf("Horus v2 length packets (16 bytes uncoded, %d bytes coded)\n", num_tx_data_bytes_v2_16);
++
++    printf("test 0: BER: 0.00 ...........: %d\n", test_sending_bytes(16, 0.00, 0));
++    printf("test 1: BER: 0.01 ...........: %d\n", test_sending_bytes(16, 0.01, 0));
++    printf("test 2: BER: 0.05 ...........: %d\n", test_sending_bytes(16, 0.05, 0));
++
++    /* we expect this always to fail, as chance of > 3 errors/codeword is high */
++
++    printf("test 3: BER: 0.10 ...........: %d\n", test_sending_bytes(16, 0.10, 0));
++
++    /* -DINTERLEAVER will make this puppy pass */
++
++    printf("test 4: 8 bit burst error....: %d\n", test_sending_bytes(16, 0.00, 1));
++
++    /* Insert 2 errors in every codeword, the maximum correction
++       capability of a Golay (23,12) code. note this one will fail
++       with -DINTERLEAVER, as we can't guarantee <= 3 errors per
++       codeword after interleaving */
++
++    printf("test 5: 1 error every 12 bits: %d\n", test_sending_bytes(16, 0.00, 2));
++
++    int num_tx_data_bytes_v2_32 = horus_l2_get_num_tx_data_bytes(32);
++    printf("Horus v2 length packets (32 bytes uncoded, %d bytes coded)\n", num_tx_data_bytes_v2_32);
++    printf("test 0: BER: 0.00 ...........: %d\n", test_sending_bytes(32, 0.00, 0));
++    printf("test 1: BER: 0.01 ...........: %d\n", test_sending_bytes(32, 0.01, 0));
++    printf("test 2: BER: 0.05 ...........: %d\n", test_sending_bytes(32, 0.05, 0));
++
++    /* we expect this always to fail, as chance of > 3 errors/codeword is high */
++
++    printf("test 3: BER: 0.10 ...........: %d\n", test_sending_bytes(32, 0.10, 0));
++
++    /* -DINTERLEAVER will make this puppy pass */
++
++    printf("test 4: 8 bit burst error....: %d\n", test_sending_bytes(32, 0.00, 1));
++
++    /* Insert 2 errors in every codeword, the maximum correction
++       capability of a Golay (23,12) code. note this one will fail
++       with -DINTERLEAVER, as we can't guarantee <= 3 errors per
++       codeword after interleaving */
++
++    printf("test 5: 1 error every 12 bits: %d\n", test_sending_bytes(32, 0.00, 2));
++    return 0;
++}
++#endif
++
++/* Horus binary packet */
++
++struct TBinaryPacket
++{
++    uint8_t     PayloadID;
++    uint16_t	Counter;
++    uint8_t	Hours;
++    uint8_t	Minutes;
++    uint8_t	Seconds;
++    float	Latitude;
++    float	Longitude;
++    uint16_t  	Altitude;
++    uint8_t     Speed;       // Speed in km/hr
++    uint8_t     Sats;
++    int8_t      Temp;        // Twos Complement Temp value.
++    uint8_t     BattVoltage; // 0 = 0.5v, 255 = 2.0V, linear steps in-between.
++    uint16_t    Checksum;    // CRC16-CCITT Checksum.
++}  __attribute__ ((packed));
++
++
++struct V2SmallBinaryPacket
++{
++uint8_t   PayloadID;	// Legacy list
++uint8_t   Counter;	// 8 bit counter
++uint16_t  BiSeconds;	// Time of day / 2
++uint8_t   Latitude[3];	// (int)(float * 1.0e7) / (1<<8)
++uint8_t   Longitude[3];	// ( better than 10m precision )
++uint16_t  Altitude;	// 0 - 65 km
++uint8_t   Voltage;	// scaled 5.0v in 255 range
++uint8_t   User;		// Temp / Sats
++	// Temperature	6 bits MSB => (+30 to -32)
++	// Satellites	2 bits LSB => 0,4,8,12 is good enough
++uint16_t  Checksum;	// CRC16-CCITT Checksum.
++}  __attribute__ ((packed));
++
++
++struct V2LargeBinaryPacket
++{
++    uint16_t     PayloadID;
++    uint16_t	Counter;
++    uint8_t	Hours;
++    uint8_t	Minutes;
++    uint8_t	Seconds;
++    float	Latitude;
++    float	Longitude;
++    uint16_t  	Altitude;
++    uint8_t     Speed;       // Speed in km/hr
++    uint8_t     Sats;
++    int8_t      Temp;        // Twos Complement Temp value.
++    uint8_t     BattVoltage; // 0 = 0.5v, 255 = 2.0V, linear steps in-between.
++    uint8_t     User[9];
++    uint16_t    Checksum;    // CRC16-CCITT Checksum.
++}  __attribute__ ((packed));
++
++#ifdef GEN_TX_BITS
++/* generate a file of tx_bits to modulate using fsk_horus.m for modem simulations */
++
++int main(void) {
++    int nbytes = sizeof(struct TBinaryPacket);
++    struct TBinaryPacket input_payload;
++    int num_tx_data_bytes = horus_l2_get_num_tx_data_bytes(nbytes);
++    unsigned char tx[num_tx_data_bytes];
++    int i;
++
++    /* all zeros is nastiest sequence for demod before scrambling */
++
++    memset(&input_payload, 0, nbytes);
++    input_payload.Checksum = horus_l2_gen_crc16((unsigned char*)&input_payload, nbytes-2);
++
++    horus_l2_encode_tx_packet(tx, (unsigned char*)&input_payload, nbytes);
++    
++    FILE *f = fopen("../octave/horus_tx_bits_binary.txt","wt");
++    assert(f != NULL);
++    int b, tx_bit;
++    for(i=0; i<num_tx_data_bytes; i++) {
++        for(b=0; b<8; b++) {
++            tx_bit = (tx[i] >> (7-b)) & 0x1; /* msb first */
++            fprintf(f,"%d ", tx_bit);
++        }
++    }
++    fclose(f);
++    for(i=0; i<num_tx_data_bytes; i++) {
++        fprintf(stdout,"%02X", tx[i]);
++    }
++    fprintf(stdout, "\n");
++
++    return 0;
++}
++#endif
++
++
++#ifdef DEC_RX_BITS
++
++/* Decode a binary file rx_bytes, e.g. from fsk_horus.m */
++
++int main(void) {
++    int nbytes = 22;
++    unsigned char output_payload[nbytes];
++    int num_tx_data_bytes = horus_l2_get_num_tx_data_bytes(nbytes);
++
++    /* real world data horus payload generated when running tx above */
++    unsigned char rx[45] = {
++        0x24,0x24,0x01,0x0b,0x00,0x00,0x05,0x3b,0xf2,0xa7,0x0b,0xc2,0x1b,
++        0xaa,0x0a,0x43,0x7e,0x00,0x05,0x00,0x25,0xc0,0xce,0xbb,0x36,0x69,
++        0x50,0x00,0x41,0xb0,0xa6,0x5e,0x91,0xa2,0xa3,0xf8,0x1d,0x00,0x00,
++        0x0c,0x76,0xc6,0x05,0xb0,0xb8};
++    int i, ret;
++
++    assert(num_tx_data_bytes == 45);
++
++    #define READ_FILE /* overwrite tx[] above, that's OK */
++    #ifdef READ_FILE
++    FILE *f = fopen("../octave/horus_rx_bits_binary.bin","rb");
++    assert(f != NULL);
++    ret = fread(rx, sizeof(char), num_tx_data_bytes, f);
++    assert(ret == num_tx_data_bytes);
++    fclose(f);
++    #endif
++
++    golay23_init();
++    horus_l2_decode_rx_packet(output_payload, rx, nbytes);
++
++    #ifdef HEX_DUMP
++    fprintf(stderr, "\nOutput Payload:\n");
++    for(i=0; i<nbytes; i++)
++        fprintf(stderr, "  %02d 0x%02x 0x%02x\n", i, output_payload[i], rx[i+2]);
++    #endif
++
++    struct TBinaryPacket h;
++    assert(sizeof(h) == nbytes);
++    memcpy(&h, output_payload, nbytes);
++
++    uint16_t crc_rx = horus_l2_gen_crc16(output_payload, nbytes-2);
++    char crc_str[80];
++    
++    if (crc_rx == h.Checksum) {
++        sprintf(crc_str, "CRC OK");
++    } else {
++        sprintf(crc_str, "CRC BAD");
++    }
++
++    fprintf(stderr, "%d,%d,%02d:%02d:%02d,%f,%f,%d,%d,%d,%d,%d,%04x %s\n",
++        h.PayloadID, h.Counter, h.Hours, h.Minutes, h.Seconds,
++        h.Latitude, h.Longitude, h.Altitude, h.Speed, h.Sats, h.Temp, 
++            h.BattVoltage, h.Checksum, crc_str);
++    
++    /* Hex ASCII file output */
++
++    #define WRITE_HEX_FILE /* overwrite tx[] above, that's OK */
++    #ifdef WRITE_HEX_FILE
++    FILE *fh = fopen("../octave/horus_rx_bits_hex.txt","wt");
++    assert(fh != NULL);
++    for(i=0; i<nbytes; i++) {
++        fprintf(fh, "%02X", (unsigned int)output_payload[i]);
++    }
++    fclose(fh);
++    #endif
++
++    return 0;
++}
++#endif
++
++#ifdef GEN_TX_BITSTREAM
++/* Generate a stream of encoded Horus packets in a format suitable to feed into fsk_mod */
++
++int main(int argc,char *argv[]) {
++
++    int i, framecnt, mode;
++    int num_tx_data_bytes = 0;
++
++    if(argc != 3){
++        fprintf(stderr,"usage: %s numFrames mode\n",argv[0]);
++        exit(1);
++    }
++
++    framecnt = atoi(argv[1]);
++    mode = atoi(argv[2]);
++
++
++    if (mode == 0){
++        // Horus Mode v1
++        int nbytes = sizeof(struct TBinaryPacket);
++        struct TBinaryPacket input_payload;
++        int num_tx_data_bytes = horus_l2_get_num_tx_data_bytes(nbytes);
++        unsigned char tx[num_tx_data_bytes];
++
++        memset(&input_payload, 0, nbytes);
++        input_payload.Checksum = horus_l2_gen_crc16((unsigned char*)&input_payload, nbytes-2);
++
++        horus_l2_encode_tx_packet(tx, (unsigned char*)&input_payload, nbytes);
++
++        int b;
++        uint8_t tx_bit;
++        while(framecnt >= 0){
++            for(i=0; i<num_tx_data_bytes; i++) {
++                for(b=0; b<8; b++) {
++                    tx_bit = (tx[i] >> (7-b)) & 0x1; /* msb first */
++                    fwrite(&tx_bit,sizeof(uint8_t),1,stdout);
++                    fflush(stdout);
++                }
++            }
++            framecnt -= 1;
++        }
++    }
++    // } else if (mode == 1) {
++    //     // 32-byte horus mode
++    //     int nbytes = sizeof(struct V2LargeBinaryPacket);
++    //     struct V2LargeBinaryPacket input_payload;
++
++    //     int num_tx_data_bytes = sizeof(uw_v2) + H_256_768_22_DATA_BYTES + H_256_768_22_PARITY_BYTES;
++    //     unsigned char tx[num_tx_data_bytes];
++    //     memset(&input_payload, 0, nbytes);
++
++    //     input_payload.PayloadID = 1;
++    //     input_payload.Counter = 2;
++    //     input_payload.Checksum = horus_l2_gen_crc16((unsigned char*)&input_payload, nbytes-2);
++
++    //     int ldpc_tx_bytes = ldpc_encode_packet(tx, (unsigned char*)&input_payload, 1);
++
++    //     int b;
++    //     uint8_t tx_bit;
++    //     while(framecnt >= 0){
++    //         for(i=0; i<num_tx_data_bytes; i++) {
++    //             for(b=0; b<8; b++) {
++    //                 tx_bit = (tx[i] >> (7-b)) & 0x1; /* msb first */
++    //                 fwrite(&tx_bit,sizeof(uint8_t),1,stdout);
++    //                 fflush(stdout);
++    //             }
++    //         }
++    //         framecnt -= 1;
++    //     }
++
++    // } else if (mode == 2) {
++    //     // 16-byte horus mode
++    //     int nbytes = sizeof(struct V2SmallBinaryPacket);
++    //     struct V2SmallBinaryPacket input_payload;
++
++    //     int num_tx_data_bytes = sizeof(uw_v2) + H_128_384_23_DATA_BYTES + H_128_384_23_PARITY_BYTES;
++    //     unsigned char tx[num_tx_data_bytes];
++    //     memset(&input_payload, 0, nbytes);
++    //     input_payload.PayloadID = 1;
++    //     input_payload.Counter = 2;
++
++    //     input_payload.Checksum = horus_l2_gen_crc16((unsigned char*)&input_payload, nbytes-2);
++
++    //     int ldpc_tx_bytes = ldpc_encode_packet(tx, (unsigned char*)&input_payload, 2);
++
++    //     int b;
++    //     uint8_t tx_bit;
++    //     while(framecnt >= 0){
++    //         for(i=0; i<num_tx_data_bytes; i++) {
++    //             for(b=0; b<8; b++) {
++    //                 tx_bit = (tx[i] >> (7-b)) & 0x1; /* msb first */
++    //                 fwrite(&tx_bit,sizeof(uint8_t),1,stdout);
++    //                 fflush(stdout);
++    //             }
++    //         }
++    //         framecnt -= 1;
++    //     }
++    // }
++
++    return 0;
++}
++#endif
++
++// from http://stackoverflow.com/questions/10564491/function-to-calculate-a-crc16-checksum
++
++unsigned short horus_l2_gen_crc16(unsigned char* data_p, unsigned char length) {
++    unsigned char x;
++    unsigned short crc = 0xFFFF;
++
++    while (length--){
++        x = crc >> 8 ^ *data_p++;
++        x ^= x>>4;
++        crc = (crc << 8) ^ ((unsigned short)(x << 12)) ^ ((unsigned short)(x <<5)) ^ ((unsigned short)x);
++    }
++    return crc;
++}
++
++
++// //  Take payload data bytes, prepend a unique word and append parity bits
++// int ldpc_encode_packet(unsigned char *out_data, unsigned char *in_data, int mode) {
++//     unsigned int   i, last = 0;
++//     unsigned char *pout;
++
++//     unsigned int data_bytes, parity_bytes, number_parity_bits, max_row_weight;
++
++//     if (mode == 1){
++//         // 32-byte Mode.
++//         data_bytes = H_256_768_22_DATA_BYTES;
++//         parity_bytes = H_256_768_22_PARITY_BYTES;
++//         number_parity_bits = H_256_768_22_NUMBERPARITYBITS;
++//         max_row_weight = H_256_768_22_MAX_ROW_WEIGHT;
++//     } else {
++//         // 16-byte Mode.
++//         data_bytes = H_128_384_23_DATA_BYTES;
++//         parity_bytes = H_128_384_23_PARITY_BYTES;
++//         number_parity_bits = H_128_384_23_NUMBERPARITYBITS;
++//         max_row_weight = H_128_384_23_MAX_ROW_WEIGHT;
++//     }
++
++//     pout = out_data;
++//     memcpy(pout, uw_v2, sizeof(uw_v2));
++//     pout += sizeof(uw_v2);
++//     memcpy(pout, in_data, data_bytes);
++//     pout += data_bytes;
++//     memset(pout, 0, parity_bytes);
++
++//     // process parity bit offsets
++//     for (i = 0; i < number_parity_bits; i++) {
++//         unsigned int shift, j;
++//         uint8_t tmp;
++
++// 	for(j = 0; j < max_row_weight; j++) {
++//         // This is a bit silly, move this out of this loop.
++//         if (mode  == 1){
++//             tmp  = H_256_768_22_H_rows[i + number_parity_bits * j];
++//         } else if (mode == 2) {
++// 		    tmp  = H_128_384_23_H_rows[i + number_parity_bits * j];
++//         }
++// 		if (!tmp)
++// 			continue;
++// 		tmp--;
++// 		shift = 7 - (tmp & 7); // MSB
++// 		last ^= in_data[tmp >> 3] >> shift;
++// 	}
++// 	shift = 7 - (i & 7); // MSB
++// 	pout[i >> 3] |= (last & 1) << shift;
++//     }
++
++//     pout = out_data + sizeof(uw_v2);
++//     interleave(pout, data_bytes + parity_bytes, 0);
++//     scramble(pout, data_bytes + parity_bytes);
++
++//     return data_bytes + parity_bytes + sizeof(uw_v2);
++// }
++
++// /* Scramble and interleave are 8bit lsb, but bitstream is sent msb */
++// #define LSB2MSB(X) (X + 7 - 2 * (X & 7) )
++
++// /* Invert bits - ldpc expects negative floats for high hits */
++// void soft_unscramble(float *in, float* out, int nbits) {
++// 	int i, ibit;
++// 	uint16_t scrambler = 0x4a80;  /* init additive scrambler at start of every frame */
++// 	uint16_t scrambler_out;
++
++// 	for ( i = 0; i < nbits; i++ ) {
++// 		scrambler_out = ( (scrambler >> 1) ^ scrambler) & 0x1;
++
++// 		/* modify i-th bit by xor-ing with scrambler output sequence */
++// 		ibit = LSB2MSB(i);
++// 		if ( scrambler_out ) {
++// 			out[ibit] = in[ibit];
++// 		} else {
++// 			out[ibit] = -in[ibit];
++// 		}
++
++// 		scrambler >>= 1;
++// 		scrambler |= scrambler_out << 14;
++// 	}
++// }
++
++// // soft bit deinterleave
++// void soft_deinterleave(float *in, float* out, int mode) {
++// 	int n, i, j, bits_per_packet, coprime;
++
++//     if (mode == 1) {
++//         // 256_768
++//         bits_per_packet = H_256_768_22_BITS_PER_PACKET;
++//         coprime = H_256_768_22_COPRIME;
++//     } else {
++//         bits_per_packet = H_128_384_23_BITS_PER_PACKET;
++//         coprime = H_128_384_23_COPRIME;
++//     }
++
++
++// 	for ( n = 0; n < bits_per_packet; n++ ) {
++// 		i = LSB2MSB(n);
++// 		j = LSB2MSB( (coprime * n) % bits_per_packet);
++// 		out[i] = in[j];
++// 	}
++// }
++
++// // packed bit deinterleave - same as Golay version , but different Coprime
++// void bitwise_deinterleave(uint8_t *inout, int nbytes)
++// {
++//     uint16_t nbits = (uint16_t)nbytes*8;
++//     uint32_t i, j, ibit, ibyte, ishift, jbyte, jshift;
++//     uint8_t out[nbytes];
++
++//     memset(out, 0, nbytes);
++//     for(j = 0; j < nbits; j++) {
++//         i = (COPRIME * j) % nbits;
++
++//         /* read bit i */
++//         ibyte = i>>3;
++//         ishift = i&7;
++//         ibit = (inout[ibyte] >> ishift) & 0x1;
++
++// 	/* write bit i to bit j position */
++//         jbyte = j>>3;
++//         jshift = j&7;
++//         out[jbyte] |= ibit << jshift;
++//     }
++ 
++//     memcpy(inout, out, nbytes);
++// }
++
++// /* Compare detected bits to corrected bits */
++// void ldpc_errors( const uint8_t *outbytes, uint8_t *rx_bytes ) {
++// 	int	length = DATA_BYTES + PARITY_BYTES;
++// 	uint8_t temp[length];
++// 	int	i, percentage, count = 0;
++// 	memcpy(temp, rx_bytes, length);
++
++// 	scramble(temp, length); // use scrambler from Golay code
++// 	bitwise_deinterleave(temp, length);
++
++// 	// count bits changed during error correction
++// 	for(i = 0; i < BITS_PER_PACKET; i++) {
++// 		int x, y, offset, shift;
++
++// 		shift = i & 7;
++// 		offset = i >> 3;
++// 		x = temp[offset] >> shift;
++// 		y = outbytes[offset] >> shift;
++// 		count += (x ^ y) & 1;
++// 	}
++
++// 	// scale errors against a maximum of 20% BER
++// 	percentage = (count * 5 * 100) / BITS_PER_PACKET;
++// 	if (percentage > 100)
++// 		percentage = 100;
++// 	set_error_count( percentage );
++// }
++
++// /* LDPC decode */
++// void horus_ldpc_decode(uint8_t *payload, float *sd, int mode) {
++// 	float sum, mean, sumsq, estEsN0, x;
++//     int bits_per_packet, payload_bytes;
++
++//     if(mode == 1){
++//         bits_per_packet = H_256_768_22_BITS_PER_PACKET;
++//         payload_bytes = H_256_768_22_DATA_BYTES;
++//     } else {
++//         bits_per_packet = H_128_384_23_BITS_PER_PACKET;
++//         payload_bytes = H_128_384_23_DATA_BYTES;
++//     }
++
++//     double sd_double[bits_per_packet];
++//     float llr[bits_per_packet];
++//     float temp[bits_per_packet];
++//     uint8_t outbits[bits_per_packet];
++
++//     int b, i, parityCC;
++// 	struct LDPC ldpc;
++
++//     // cast incoming SDs to doubles for sd_to_llr
++//     // For some reason I need to flip the sign ?!?!
++//     for ( i = 0; i < bits_per_packet; i++ )
++//         sd_double[i] = (double)sd[i]*-1.0;
++
++
++//     sd_to_llr(llr, sd_double, bits_per_packet);
++
++// 	/* reverse whitening and re-order bits */
++// 	soft_unscramble(llr, temp, bits_per_packet);
++// 	soft_deinterleave(temp, llr, mode);
++
++// 	/* correct errors */
++//     if (mode == 1){
++//         // 32-byte mode H_256_768_22
++//         ldpc.max_iter = H_256_768_22_MAX_ITER;
++//         ldpc.dec_type = 0;
++//         ldpc.q_scale_factor = 1;
++//         ldpc.r_scale_factor = 1;
++//         ldpc.CodeLength = H_256_768_22_CODELENGTH;
++//         ldpc.NumberParityBits = H_256_768_22_NUMBERPARITYBITS;
++//         ldpc.NumberRowsHcols = H_256_768_22_NUMBERROWSHCOLS;
++//         ldpc.max_row_weight = H_256_768_22_MAX_ROW_WEIGHT;
++//         ldpc.max_col_weight = H_256_768_22_MAX_COL_WEIGHT;
++//         ldpc.H_rows = (uint16_t *)H_256_768_22_H_rows;
++//         ldpc.H_cols = (uint16_t *)H_256_768_22_H_cols;
++//     } else {
++//         // 16-byte mode
++//         ldpc.max_iter = H_128_384_23_MAX_ITER;
++//         ldpc.dec_type = 0;
++//         ldpc.q_scale_factor = 1;
++//         ldpc.r_scale_factor = 1;
++//         ldpc.CodeLength = H_128_384_23_CODELENGTH;
++//         ldpc.NumberParityBits = H_128_384_23_NUMBERPARITYBITS;
++//         ldpc.NumberRowsHcols = H_128_384_23_NUMBERROWSHCOLS;
++//         ldpc.max_row_weight = H_128_384_23_MAX_ROW_WEIGHT;
++//         ldpc.max_col_weight = H_128_384_23_MAX_COL_WEIGHT;
++//         ldpc.H_rows = (uint16_t *)H_128_384_23_H_rows;
++//         ldpc.H_cols = (uint16_t *)H_128_384_23_H_cols;
++//     }
++
++// 	i = run_ldpc_decoder(&ldpc, outbits, llr, &parityCC);
++//     fprintf(stderr,"iterations: %d\n", i);
++
++// 	/* convert MSB bits to a packet of bytes */    
++// 	for (b = 0; b < payload_bytes; b++) {
++// 		uint8_t rxbyte = 0;
++// 		for(i=0; i<8; i++)
++// 			rxbyte |= outbits[b*8+i] << (7 - i);
++// 		payload[b] = rxbyte;
++// 	}
++// }
+diff --git a/firmware/baseband/horus/horus_l2.h b/firmware/baseband/horus/horus_l2.h
+new file mode 100644
+index 0000000..4ce674a
+--- /dev/null
++++ b/firmware/baseband/horus/horus_l2.h
+@@ -0,0 +1,36 @@
++/*---------------------------------------------------------------------------*\
++
++  FILE........: horus_l2.h
++  AUTHOR......: David Rowe
++  DATE CREATED: Dec 2015
++
++\*---------------------------------------------------------------------------*/
++
++#ifndef __HORUS_L2__
++#define __HORUS_L2__
++
++int horus_l2_get_num_tx_data_bytes(int num_payload_data_bytes);
++
++/* call this first */
++
++void horus_l2_init(void);
++
++/* returns number of output bytes in output_tx_data */
++
++int horus_l2_encode_tx_packet(unsigned char *output_tx_data,
++                              unsigned char *input_payload_data,
++                              int            num_payload_data_bytes);
++
++void horus_l2_decode_rx_packet(unsigned char *output_payload_data,
++                               unsigned char *input_rx_data,
++                               int            num_payload_data_bytes);
++
++unsigned short horus_l2_gen_crc16(unsigned char* data_p, unsigned char length);
++
++// int ldpc_encode_packet(uint8_t *buff_mfsk, uint8_t *FSK, int mode);
++
++// void soft_unscramble(float *in, float* out, int nbits);
++// void soft_deinterleave(float *in, float* out, int mode);
++// void horus_ldpc_decode(uint8_t *payload, float *sd, int mode);
++
++#endif
+diff --git a/firmware/baseband/horus/horus_rx.cpp b/firmware/baseband/horus/horus_rx.cpp
+new file mode 100644
+index 0000000..131535e
+--- /dev/null
++++ b/firmware/baseband/horus/horus_rx.cpp
+@@ -0,0 +1,167 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++#include "horus_rx.hpp"
++#include <string.h>
++extern "C" {
++#include "horus_l2.h"
++}
++
++namespace horus {
++namespace {
++// Exact 160-sample period: 135 Hz is bin 9 at 2400 Hz.
++const int16_t sine[160] = {
++    0, 1286, 2571, 3851, 5126, 6393, 7649, 8894, 10126, 11341, 12539, 13718, 14876, 16011, 17121, 18204, 19260, 20286, 21280, 22242, 23170, 24062, 24916, 25732, 26509, 27245, 27938, 28589, 29196, 29757, 30273, 30742, 31163, 31537, 31862, 32137, 32364, 32540, 32666, 32742, 32767, 32742, 32666, 32540, 32364, 32137, 31862, 31537, 31163, 30742, 30273, 29757, 29196, 28589, 27938, 27245, 26509, 25732, 24916, 24062, 23170, 22242, 21280, 20286, 19260, 18204, 17121, 16011, 14876, 13718, 12539, 11341, 10126, 8894, 7649, 6393, 5126, 3851, 2571, 1286, 0, -1286, -2571, -3851, -5126, -6393, -7649, -8894, -10126, -11341, -12539, -13718, -14876, -16011, -17121, -18204, -19260, -20286, -21280, -22242, -23170, -24062, -24916, -25732, -26509, -27245, -27938, -28589, -29196, -29757, -30273, -30742, -31163, -31537, -31862, -32137, -32364, -32540, -32666, -32742, -32767, -32742, -32666, -32540, -32364, -32137, -31862, -31537, -31163, -30742, -30273, -29757, -29196, -28589, -27938, -27245, -26509, -25732, -24916, -24062, -23170, -22242, -21280, -20286, -19260, -18204, -17121, -16011, -14876, -13718, -12539, -11341, -10126, -8894, -7649, -6393, -5126, -3851, -2571, -1286};
++class Bits {
++   public:
++    Bits(const uint8_t* data, size_t bytes)
++        : data_(data), end_(bytes * 8) {}
++    uint32_t get(unsigned count) {
++        if (pos_ + count > end_) {
++            valid = false;
++            return 0;
++        }
++        uint32_t value = 0;
++        while (count--) {
++            value = (value << 1) | ((data_[pos_ / 8] >> (7 - pos_ % 8)) & 1);
++            ++pos_;
++        }
++        return value;
++    }
++    bool valid{true};
++
++   private:
++    const uint8_t* data_;
++    size_t pos_{}, end_;
++};
++}  // namespace
++
++bool parse_v3(const uint8_t* payload, size_t size, Position& out) {
++    if (size < 16) return false;
++    Bits b(payload, size);
++    b.get(1);   // ASN.1 extension-present bit; extensions follow the root fields.
++    b.get(11);  // Root optional field presence map.
++    const unsigned length = b.get(4) + 1;
++    if (length > 15) return false;
++    static const char alphabet[] = "-/0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
++    Position result{};
++    for (unsigned n = 0; n < length; ++n) result.callsign[n] = alphabet[b.get(6)];
++    result.sequence = b.get(16);
++    const uint32_t seconds = b.get(17), lat = b.get(25), lon = b.get(26), alt = b.get(16);
++    if (!b.valid || seconds > 86401 || lat > 18000000 || lon > 36000000 || alt > 51000) return false;
++    result.seconds = static_cast<int32_t>(seconds) - 1;
++    result.latitude = static_cast<int32_t>(lat) - 9000000;
++    result.longitude = static_cast<int32_t>(lon) - 18000000;
++    result.altitude = static_cast<int32_t>(alt) - 1000;
++    out = result;
++    return true;
++}
++
++Receiver::Receiver(Callback callback, void* context)
++    : callback_(callback), context_(context) {
++    reset();
++}
++void Receiver::reset() {
++    for (auto& lane : lanes_) lane = Lane{};
++    for (auto& tone : tones_) tone = Tone{};
++    ring_ = oscillator_ = 0;
++    memset(filter_i_, 0, sizeof(filter_i_));
++    memset(filter_q_, 0, sizeof(filter_q_));
++    filter_pos_ = filter_count_ = 0;
++    samples_ = packets_ = 0;
++    last_crc_ = 0;
++    last_packet_sample_ = 0;
++}
++void Receiver::sample_24k(int16_t i, int16_t q) {
++    // 24k -> 2.4k anti-alias filter. 800 Hz cutoff, Hamming window, Q15 taps.
++    static const int16_t taps[121] = {0, -3, -6, -9, -12, -16, -19, -22, -24, -25, -26, -24, -21, -17, -9, 0, 11, 25, 39, 55, 70, 84, 97, 105, 110, 109, 102, 87, 65, 36, 0, -42, -89, -139, -190, -239, -283, -319, -344, -355, -349, -323, -277, -208, -115, 0, 137, 294, 467, 654, 850, 1050, 1248, 1440, 1620, 1783, 1923, 2037, 2121, 2173, 2190, 2173, 2121, 2037, 1923, 1783, 1620, 1440, 1248, 1050, 850, 654, 467, 294, 137, 0, -115, -208, -277, -323, -349, -355, -344, -319, -283, -239, -190, -139, -89, -42, 0, 36, 65, 87, 102, 109, 110, 105, 97, 84, 70, 55, 39, 25, 11, 0, -9, -17, -21, -24, -26, -25, -24, -22, -19, -16, -12, -9, -6, -3, 0};
++    filter_i_[filter_pos_] = i;
++    filter_q_[filter_pos_] = q;
++    const unsigned newest = filter_pos_;
++    filter_pos_ = (filter_pos_ + 1) % 121;
++    if (++filter_count_ < 10) return;
++    filter_count_ = 0;
++    int64_t re = 0, im = 0;
++    unsigned pos = newest;
++    for (unsigned n = 0; n < 121; ++n) {
++        re += static_cast<int32_t>(filter_i_[pos]) * taps[n];
++        im += static_cast<int32_t>(filter_q_[pos]) * taps[n];
++        pos = pos == 0 ? 120 : pos - 1;
++    }
++    // FIR overshoot can exceed the int16 range even for bounded input.
++    re >>= 15;
++    im >>= 15;
++    if (re > 32767) re = 32767;
++    if (re < -32768) re = -32768;
++    if (im > 32767) im = 32767;
++    if (im < -32768) im = -32768;
++    sample(re, im);
++}
++void Receiver::sample(int16_t i, int16_t q) {
++    static const unsigned steps[4] = {133, 151, 9, 27};  // -405,-135,135,405 Hz
++    uint64_t best = 0;
++    unsigned winner = 0;
++    for (unsigned t = 0; t < 4; ++t) {
++        const unsigned phase = (oscillator_ * steps[t]) % 160;
++        const int32_t s = sine[phase], c = sine[(phase + 40) % 160];
++        // Conjugate mixing; divide before accumulating to bound all sums.
++        const int16_t re = (static_cast<int32_t>(i) * c + static_cast<int32_t>(q) * s) >> 16;
++        const int16_t im = (static_cast<int32_t>(q) * c - static_cast<int32_t>(i) * s) >> 16;
++        auto& tone = tones_[t];
++        tone.re += re - tone.history_re[ring_];
++        tone.im += im - tone.history_im[ring_];
++        tone.history_re[ring_] = re;
++        tone.history_im[ring_] = im;
++        const uint64_t energy = static_cast<int64_t>(tone.re) * tone.re + static_cast<int64_t>(tone.im) * tone.im;
++        if (energy > best) {
++            best = energy;
++            winner = t;
++        }
++    }
++    if (++samples_ >= phases) symbol(lanes_[ring_], winner);
++    ring_ = (ring_ + 1) % phases;
++    oscillator_ = (oscillator_ + 1) % 160;
++}
++void Receiver::symbol(Lane& lane, unsigned value) {
++    if (!lane.collecting) {
++        lane.sync = (lane.sync << 2) | value;
++        if (lane.sync == 0x2424) {
++            memset(lane.data, 0, sizeof(lane.data));
++            lane.data[0] = lane.data[1] = 0x24;
++            lane.bits = 16;
++            lane.collecting = true;
++        }
++        return;
++    }
++    lane.data[lane.bits / 8] |= value << (6 - lane.bits % 8);
++    lane.bits += 2;
++    if (lane.bits % 8) return;
++    const unsigned bytes = lane.bits / 8;
++    static const unsigned lengths[] = {32, 48, 64, 96, 128};
++    for (unsigned size : lengths) {
++        if (bytes == static_cast<unsigned>(horus_l2_get_num_tx_data_bytes(size)) && packet(lane.data, size)) {
++            lane.collecting = false;
++            lane.sync = 0;
++            return;
++        }
++    }
++    if (bytes == sizeof(lane.data)) {
++        lane.collecting = false;
++        lane.sync = 0;
++    }
++}
++bool Receiver::packet(const uint8_t* data, size_t size) {
++    uint8_t encoded[249]{}, decoded[128]{};
++    memcpy(encoded, data, horus_l2_get_num_tx_data_bytes(size));
++    horus_l2_decode_rx_packet(decoded, encoded, size);
++    const uint16_t crc = decoded[0] | (decoded[1] << 8);
++    if (crc != horus_l2_gen_crc16(decoded + 2, size - 2)) return false;
++    Position position{};
++    if (!parse_v3(decoded + 2, size - 2, position)) return false;
++    // Adjacent symbol phases usually recover the same packet. Report once.
++    if (packets_ && crc == last_crc_ && samples_ - last_packet_sample_ < 2400) return true;
++    ++packets_;
++    last_crc_ = crc;
++    last_packet_sample_ = samples_;
++    if (callback_) callback_(position, context_);
++    return true;
++}
++}  // namespace horus
+diff --git a/firmware/baseband/horus/horus_rx.hpp b/firmware/baseband/horus/horus_rx.hpp
+new file mode 100644
+index 0000000..af2b29f
+--- /dev/null
++++ b/firmware/baseband/horus/horus_rx.hpp
+@@ -0,0 +1,47 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++// Fixed-memory Horus V3 receiver, 2400 complex samples/s, 100 symbols/s.
++#pragma once
++#include <stdint.h>
++#include <stddef.h>
++
++namespace horus {
++struct Position {
++    char callsign[16]{};
++    uint16_t sequence{};
++    int32_t seconds{}, latitude{}, longitude{}, altitude{};
++};
++bool parse_v3(const uint8_t* payload, size_t size, Position& out);
++
++class Receiver {
++   public:
++    using Callback = void (*)(const Position&, void*);
++    Receiver(Callback callback, void* context);
++    void reset();
++    void sample(int16_t i, int16_t q);
++    void sample_24k(int16_t i, int16_t q);
++    uint32_t packets() const { return packets_; }
++
++   private:
++    static constexpr unsigned phases = 24;
++    struct Lane {
++        uint16_t sync{};
++        uint16_t bits{};
++        bool collecting{};
++        uint8_t data[249]{};
++    } lanes_[phases]{};
++    struct Tone {
++        int32_t re{}, im{};
++        int16_t history_re[phases]{}, history_im[phases]{};
++    } tones_[4]{};
++    unsigned ring_{}, oscillator_{};
++    int16_t filter_i_[121]{}, filter_q_[121]{};
++    unsigned filter_pos_{}, filter_count_{};
++    uint32_t samples_{}, packets_{};
++    uint16_t last_crc_{};
++    uint32_t last_packet_sample_{};
++    Callback callback_;
++    void* context_;
++    void symbol(Lane& lane, unsigned value);
++    bool packet(const uint8_t* data, size_t size);
++};
++}  // namespace horus
+diff --git a/firmware/baseband/horus/mpdecode_core.h b/firmware/baseband/horus/mpdecode_core.h
+new file mode 100644
+index 0000000..0e15a0a
+--- /dev/null
++++ b/firmware/baseband/horus/mpdecode_core.h
+@@ -0,0 +1,54 @@
++/*
++  FILE...: mpdecode_core.h
++  AUTHOR.: David Rowe
++  CREATED: Sep 2016
++
++  C-callable core functions for MpDecode, so they can be used for
++  Octave and C programs.  Also some convenience functions to help use
++  the C-callable LDPC decoder in C programs.
++*/
++
++#ifndef __MPDECODE_CORE__
++#define __MPDECODE_CORE__
++
++#include <stdint.h>
++
++#include "comp.h"
++
++struct LDPC {
++    int max_iter;
++    int dec_type;
++    int q_scale_factor;
++    int r_scale_factor;
++    int CodeLength;
++    int NumberParityBits;
++    int NumberRowsHcols;
++    int max_row_weight;
++    int max_col_weight;
++
++    /* these two are fixed to code params */
++    int ldpc_data_bits_per_frame;
++    int ldpc_coded_bits_per_frame;
++
++    /* these three may vary if we don't use all data bits in code */
++    int data_bits_per_frame;
++    int coded_bits_per_frame;
++    int coded_syms_per_frame;
++
++    uint16_t *H_rows;
++    uint16_t *H_cols;
++};
++
++void encode(struct LDPC *ldpc, unsigned char ibits[], unsigned char pbits[]);
++
++int run_ldpc_decoder(struct LDPC *ldpc, uint8_t out_char[], float input[], int *parityCheckCount);
++
++void sd_to_llr(float llr[], double sd[], int n);
++void Demod2D(float symbol_likelihood[], COMP r[], COMP S_matrix[], float EsNo, float fading[], float mean_amp, int number_symbols);
++void Somap(float bit_likelihood[], float symbol_likelihood[], int number_symbols);
++void symbols_to_llrs(float llr[], COMP rx_qpsk_symbols[], float rx_amps[], float EsNo, float mean_amp, int nsyms);
++
++void ldpc_print_info(struct LDPC *ldpc);
++
++
++#endif
+diff --git a/firmware/baseband/proc_horus.cpp b/firmware/baseband/proc_horus.cpp
+new file mode 100644
+index 0000000..057db2a
+--- /dev/null
++++ b/firmware/baseband/proc_horus.cpp
+@@ -0,0 +1,43 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++#include "proc_horus.hpp"
++#include "portapack_shared_memory.hpp"
++#include "event_m4.hpp"
++#include <string.h>
++
++HorusProcessor::HorusProcessor() {
++    decim_0.configure(taps_4k25_decim_0.taps);
++    decim_1.configure(taps_4k25_decim_1.taps);
++    filter.configure(taps_11k0_channel.taps, 2);
++    configured_ = true;
++}
++void HorusProcessor::execute(const buffer_c8_t& input) {
++    if (!configured_) return;
++    const buffer_c16_t target{buffer_.data(), buffer_.size()};
++    const auto first = decim_0.execute(input, target);
++    const buffer_c16_t half{buffer_.data() + 256, 256};
++    const auto second = decim_1.execute(first, half);
++    const auto channel = filter.execute(second, target);  // 24000 complex samples/s
++    feed_channel_stats(channel);
++    for (size_t n = 0; n < channel.count; ++n) {
++        decoder_.sample_24k(channel.p[n].real(), channel.p[n].imag());
++    }
++}
++void HorusProcessor::received(const horus::Position& position, void*) {
++    // Existing n_261025 IPC envelope, with an app-local binary payload.
++    // No new Message ID or stock firmware changes are required at runtime.
++    RTTYDataMessage message{};
++    static_assert(sizeof(position) <= sizeof(message.data), "IPC payload size");
++    memcpy(message.data, &position, sizeof(position));
++    message.data_len = sizeof(position);
++    shared_memory.application_queue.push(message);
++}
++void HorusProcessor::on_message(const Message* message) {
++    if (message->id == Message::ID::RTTYData) {
++        decoder_.reset();
++    }
++}
++int main() {
++    EventDispatcher dispatcher{std::make_unique<HorusProcessor>()};
++    dispatcher.run();
++    return 0;
++}
+diff --git a/firmware/baseband/proc_horus.hpp b/firmware/baseband/proc_horus.hpp
+new file mode 100644
+index 0000000..78b2b78
+--- /dev/null
++++ b/firmware/baseband/proc_horus.hpp
+@@ -0,0 +1,27 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++#pragma once
++#include "baseband_processor.hpp"
++#include "baseband_thread.hpp"
++#include "rssi_thread.hpp"
++#include "dsp_decimate.hpp"
++#include "dsp_fir_taps.hpp"
++#include "horus/horus_rx.hpp"
++
++class HorusProcessor : public BasebandProcessor {
++   public:
++    HorusProcessor();
++    void execute(const buffer_c8_t& buffer) override;
++    void on_message(const Message* message) override;
++
++   private:
++    static constexpr uint32_t sample_rate = 3072000;
++    dsp::decimate::FIRC8xR16x24FS4Decim8 decim_0{};
++    dsp::decimate::FIRC16xR16x32Decim8 decim_1{};
++    dsp::decimate::FIRAndDecimateComplex filter{};
++    std::array<complex16_t, 512> buffer_{};
++    bool configured_{false};
++    horus::Receiver decoder_{received, this};
++    static void received(const horus::Position& position, void* context);
++    BasebandThread baseband_thread{sample_rate, this, baseband::Direction::Receive};
++    RSSIThread rssi_thread{};
++};
